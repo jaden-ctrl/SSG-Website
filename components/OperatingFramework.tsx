@@ -20,8 +20,10 @@ export default function OperatingFramework() {
       const node = sectionRef.current;
       if (!node) return;
       const rect = node.getBoundingClientRect();
-      const travel = Math.max(rect.height + window.innerHeight, 1);
-      const progress = Math.min(Math.max((window.innerHeight - rect.top) / travel, 0), 0.999);
+      const activationStart = window.innerHeight * 0.85;
+      const activationEnd = window.innerHeight * 0.35;
+      const travel = Math.max(rect.height + activationStart - activationEnd, 1);
+      const progress = Math.min(Math.max((activationStart - rect.top) / travel, 0), 0.999);
       setActive(Math.min(stages.length - 1, Math.floor(progress * stages.length)));
     };
     onScroll();
