@@ -1,10 +1,10 @@
-# Shipley Solutions Group Inc. Website — v3
+# Shipley Solutions Group Inc. Website — V4
 
 Production-oriented Next.js website for SSG.
 
 ## Lead capture / HubSpot CRM
 
-Both website forms submit to `/api/lead`.
+The Start a Conversation form submits to `/api/lead`. Its working HubSpot behavior is intentionally preserved in V4.
 
 The API now sends leads directly into HubSpot Contacts:
 - Creates a contact when the email is new.
@@ -27,8 +27,21 @@ In Netlify:
 3. Add `HUBSPOT_ACCESS_TOKEN` and paste the token as the value.
 4. Save it.
 5. Trigger a new production deploy.
-6. Submit a test Free Audit and Project Inquiry.
-7. Confirm both contacts appear in HubSpot.
+6. Submit a test Project Inquiry.
+7. Confirm the contact appears in HubSpot.
+
+## Free Audit / SSG Brain boundary
+
+Free Audit is a separate workflow. It submits only to `/api/audit` and does not use the HubSpot lead-capture route. The audit endpoint is reserved for the later SSG Brain integration.
+
+## V4 release
+
+- Mobile-safe SSG Growth System presentation.
+- Functional accessible mobile navigation.
+- Expanded About, Why SSG, approach and outcome messaging.
+- Visual Free Audit-to-growth customer journey.
+- Scroll-progressive seven-stage operating framework.
+- Restrained reveal, stagger, timeline and metric animations with reduced-motion support.
 
 ### Optional secondary webhook
 
