@@ -2,11 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 
-type LeadFormProps = {
-  source?: string;
-};
-
-export default function LeadForm({ source = 'website-contact' }: LeadFormProps) {
+export default function AuditForm() {
   const [status, setStatus] = useState('');
   const [sending, setSending] = useState(false);
 
@@ -15,7 +11,7 @@ export default function LeadForm({ source = 'website-contact' }: LeadFormProps) 
     if (sending) return;
 
     setSending(true);
-    setStatus('Sending…');
+    setStatus('Sending your business data to the SSG Brain…');
 
     const form = e.currentTarget;
     const data = Object.fromEntries(new FormData(form).entries());
@@ -23,8 +19,8 @@ export default function LeadForm({ source = 'website-contact' }: LeadFormProps) 
 
     const payload = {
       ...data,
-      source,
-      form_variant: 'contact',
+      source: 'free-business-audit',
+      form_variant: 'audit',
       utm_source: params.get('utm_source') || '',
       utm_medium: params.get('utm_medium') || '',
       utm_campaign: params.get('utm_campaign') || '',
@@ -32,18 +28,23 @@ export default function LeadForm({ source = 'website-contact' }: LeadFormProps) 
     };
 
     try {
-      const res = await fetch('/api/lead', {
+      const res = await fetch('/api/audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) throw new Error('Request failed');
+      const result = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setStatus(result?.error || 'The SSG Brain is not available yet. Please try again later.');
+        return;
+      }
 
       form.reset();
-      setStatus('Thanks — your project inquiry has been received.');
+      setStatus('Your audit has been generated.');
     } catch {
-      setStatus('Something went wrong. Please try again.');
+      setStatus('Something went wrong while connecting to the SSG Brain. Please try again.');
     } finally {
       setSending(false);
     }
@@ -79,57 +80,49 @@ export default function LeadForm({ source = 'website-contact' }: LeadFormProps) 
       </label>
 
       <label>
-        Website
-        <input name="website" placeholder="https://" />
+        Website or primary online presence
+        <input name="website" placeholder="https://" required />
       </label>
 
       <div className="form-row">
         <label>
-          What can we help you build?
-          <select name="project_type" defaultValue="" required>
+          Primary growth concern
+          <select name="growth_concern" defaultValue="" required>
             <option value="" disabled>Select one</option>
-            <option>Website / digital presence</option>
-            <option>CRM & sales system</option>
-            <option>Workflow automation</option>
-            <option>AI implementation</option>
-            <option>Lead generation system</option>
-            <option>Growth strategy / advisory</option>
-            <option>Multiple systems / full engagement</option>
+            <option>Website is not converting</option>
+            <option>Not enough qualified leads</option>
+            <option>Follow-up is inconsistent</option>
+            <option>CRM / pipeline is disorganized</option>
+            <option>Too much manual work</option>
+            <option>Need stronger local visibility</option>
+            <option>Not sure — need diagnosis</option>
           </select>
         </label>
         <label>
-          Target timeline
-          <select name="timeline" defaultValue="" required>
-            <option value="" disabled>Select one</option>
-            <option>ASAP</option>
-            <option>Within 30 days</option>
-            <option>1–3 months</option>
-            <option>3+ months</option>
-            <option>Exploring options</option>
+          Approximate monthly lead volume
+          <select name="monthly_leads" defaultValue="">
+            <option value="" disabled>Select range</option>
+            <option>0–10</option>
+            <option>11–30</option>
+            <option>31–100</option>
+            <option>100+</option>
+            <option>Not sure</option>
           </select>
         </label>
       </div>
 
       <label>
-        Estimated project investment
-        <select name="budget" defaultValue="">
-          <option value="" disabled>Select a range</option>
-          <option>Under $2,500</option>
-          <option>$2,500–$5,000</option>
-          <option>$5,000–$10,000</option>
-          <option>$10,000–$25,000</option>
-          <option>$25,000+</option>
-          <option>Not sure yet</option>
-        </select>
+        Where do leads currently go after they contact you?
+        <input name="lead_flow" placeholder="Example: email inbox, spreadsheet, HubSpot, phone only" />
       </label>
 
       <label>
-        What outcome are you trying to create?
+        What feels like the biggest leak right now?
         <textarea name="message" required />
       </label>
 
       <button className="btn btn-primary" type="submit" disabled={sending}>
-        {sending ? 'Sending…' : 'Start the Conversation'}
+        {sending ? 'Analyzing…' : 'Request My Free Audit'}
       </button>
       <div className="form-status" aria-live="polite">{status}</div>
     </form>
