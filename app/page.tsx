@@ -38,9 +38,9 @@ export default function Home() {
     </div></section>
 
     <section className="proof-strip"><div className="container proof-grid">
-      <div><strong><CountUp value={7}/></strong><span>connected growth stages</span></div>
-      <div><strong><CountUp value={1}/></strong><span>accountable implementation partner</span></div>
-      <div><strong><CountUp value={24} suffix="/7"/></strong><span>system availability by design</span></div>
+      <div><strong><CountUp value={7}/></strong><span>Connected growth stages</span></div>
+      <div><strong><CountUp value={1}/></strong><span>Strategy-to-execution partner</span></div>
+      <div><strong><CountUp value={24} suffix="/7"/></strong><span>Automated systems working behind the scenes</span></div>
     </div></section>
 
     <section className="section" id="services"><div className="container">
