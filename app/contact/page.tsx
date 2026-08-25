@@ -37,7 +37,7 @@ export default function Contact() {
               <h2>Start with the outcome.</h2>
               <p className="muted">We’ll use your answers to route the conversation appropriately.</p>
             </div>
-            <LeadForm source="project-inquiry" variant="contact" />
+            <LeadForm source="project-inquiry" />
           </div>
         </div>
       </section>
