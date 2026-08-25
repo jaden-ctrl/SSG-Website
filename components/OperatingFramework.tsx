@@ -21,27 +21,20 @@ export default function OperatingFramework() {
       const node = sectionRef.current;
       if (!node) return;
 
-      const items = Array.from(node.querySelectorAll<HTMLElement>('.process-item'));
       const mobile = window.matchMedia('(max-width: 720px)').matches;
 
-      if (mobile && items.length) {
-        // On mobile, advance the description according to the stage nearest
-        // the reading zone beneath the sticky navigation/detail card.
-        const readingLine = Math.min(window.innerHeight * 0.56, 500);
-        let closest = 0;
-        let closestDistance = Number.POSITIVE_INFINITY;
+      if (mobile) {
+        const process = node.querySelector<HTMLElement>('.process');
+        if (!process) return;
 
-        items.forEach((item, index) => {
-          const rect = item.getBoundingClientRect();
-          const center = rect.top + rect.height / 2;
-          const distance = Math.abs(center - readingLine);
-          if (distance < closestDistance) {
-            closestDistance = distance;
-            closest = index;
-          }
-        });
+        const rect = process.getBoundingClientRect();
+        const readingLine = Math.min(window.innerHeight * 0.58, 500);
+        const start = readingLine + 70;
+        const end = readingLine - Math.max(rect.height - 90, 1);
+        const travel = Math.max(start - end, 1);
+        const progress = Math.min(Math.max((start - rect.top) / travel, 0), 0.999);
 
-        setActive(closest);
+        setActive(Math.min(stages.length - 1, Math.floor(progress * stages.length)));
         return;
       }
 
