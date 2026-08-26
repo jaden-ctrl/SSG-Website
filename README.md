@@ -32,7 +32,7 @@ In Netlify:
 
 ## Free Audit / SSG Brain boundary
 
-Free Audit is a separate workflow. It submits only to `/api/audit` and does not use the HubSpot lead-capture route. The audit endpoint is reserved for the later SSG Brain integration.
+Free Audit is linked to `/audit`, which renders `components/AuditForm.tsx` and submits only to `/api/audit`. The governed SSGAI flow opens a durable case, creates a draft preview, stops at `QA_PENDING`, and requires an authenticated SSG human review before `PREVIEW_RELEASED`. Only a released audit is projected to HubSpot or the optional automation webhook.
 
 ## V4 release
 
@@ -65,3 +65,14 @@ npm run dev
 Then open `http://localhost:3000`.
 
 For local HubSpot form testing, copy `.env.example` to `.env.local` and insert your token there. Never commit `.env.local`.
+
+
+## SSGAI deployment variables
+
+Required server-only Netlify variables:
+
+- `OPENAI_API_KEY`
+- `SSGAI_REVIEW_TOKEN`
+- `SSGAI_AGENT_RELEASE_ID` (use an immutable release ID in production)
+
+Optional values are documented in `.env.example`. The temporary reviewer API is `POST /api/admin/reviews`; place it behind SSG staff identity and role authorization before broad production use.
