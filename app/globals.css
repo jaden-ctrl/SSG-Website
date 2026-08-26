@@ -239,3 +239,14 @@ textarea { min-height:140px; resize:vertical; }
   .audit-mini-grid { grid-template-columns:1fr; }
   .contact-form-shell { padding:20px; }
 }
+
+
+/* SSGAI Free Audit states and released preview */
+.honeypot { display:none !important; }
+.audit-results { display:grid; gap:18px; }
+.audit-score { display:flex; align-items:baseline; gap:8px; color:#8eabff; }
+.audit-score strong { font-size:3.2rem; line-height:1; }
+.audit-finding { padding:18px 0; border-top:1px solid var(--line); }
+.audit-finding h3 { margin:10px 0 6px; }
+.audit-finding p { margin:7px 0; color:var(--muted); }
+.audit-case-note { padding:16px; border:1px solid rgba(95,134,255,.28); border-radius:12px; background:rgba(24,86,253,.07); }
