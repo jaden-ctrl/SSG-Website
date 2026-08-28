@@ -1,0 +1,37 @@
+name: Atlas Verification
+
+on:
+  pull_request:
+    paths:
+      - "lib/atlas/**"
+      - "app/api/atlas/**"
+      - "evals/**"
+      - "package.json"
+      - "tsconfig.json"
+      - ".github/workflows/atlas-verification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package.json
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck, Atlas tests, and production build
+        run: npm run atlas:verify
