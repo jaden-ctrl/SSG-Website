@@ -17,5 +17,7 @@ test("Atlas Free Audit is explicitly non-operational and review-only", async () 
   assert.match(runtime, /review candidate/);
   assert.match(runtime, /human must approve it before release/);
   assert.match(runtime, /Do not browse, contact anyone, publish, deploy, approve/);
+  assert.match(runtime, /Do not delegate specialist tasks in Free Audit mode/);
+  assert.match(runtime, /ATLAS_FREE_AUDIT_MAX_TURNS \|\| 3/);
   assert.match(runtime, /partialAuditSchema/);
 });

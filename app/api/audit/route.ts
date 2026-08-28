@@ -13,6 +13,7 @@ const hash=(value:string)=>createHash("sha256").update(value).digest("hex");
 export async function POST(request:Request){
   const caseId=crypto.randomUUID(),accessToken=randomBytes(24).toString("base64url"),started=Date.now();
   try{
+    if(!process.env.OPENAI_API_KEY)return NextResponse.json({error:"The Free Audit service is not configured for this deploy preview. No submission was saved.",caseId},{status:503});
     if(Number(request.headers.get("content-length")||0)>30_000)return NextResponse.json({error:"Request is too large.",caseId},{status:413});
     const intake=intakeSchema.parse(await request.json()),now=new Date().toISOString();
     let record:AuditCase={caseId,tenantId:`pretenant:${hash(intake.email.toLowerCase()).slice(0,16)}`,accessTokenHash:hash(accessToken),version:1,state:"PROSPECT_RECEIVED",createdAt:now,updatedAt:now,intake,inputSnapshotHash:hash(JSON.stringify(intake)),consent:{noticeVersion:"free-audit-notice-v1",purpose:"Prepare and review an SSGAI free audit preview and permit relevant follow-up",recordedAt:now},governance:{...SSG_BRAIN_BASELINE,...SSGAI_AGENT_RELEASE}};
