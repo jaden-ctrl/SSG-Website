@@ -8,7 +8,7 @@ type StorageRuntime = { backend: "netlify"; scope: StorageScope };
 const storageRuntime = new AsyncLocalStorage<StorageRuntime>();
 
 export function withNetlifyStorage<T>(context: NetlifyRuntimeContext | undefined, operation: () => T): T {
-  const scope: StorageScope = context?.deploy?.context === "deploy-preview" ? "deploy" : "site";
+  const scope: StorageScope = context?.deploy?.context === "production" ? "site" : "deploy";
   return storageRuntime.run({ backend: "netlify", scope }, operation);
 }
 
@@ -20,5 +20,5 @@ export function storageBackend(): "local" | "netlify" {
 }
 
 export function storageScope(): StorageScope {
-  return storageRuntime.getStore()?.scope || "site";
+  return storageRuntime.getStore()?.scope || "deploy";
 }

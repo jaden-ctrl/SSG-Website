@@ -12,9 +12,9 @@ const fieldLabels: Record<string, string> = {
   consent: 'Audit consent',
 };
 
-function responseError(data: { error?: string; code?: string; diagnostic?: { type?: string; message?: string }; fields?: Record<string, string[] | undefined> }) {
+function responseError(data: { error?: string; code?: string; fields?: Record<string, string[] | undefined> }) {
   const invalid = Object.entries(data.fields || {}).filter(([, messages]) => messages?.length);
-  if (!invalid.length) return `${data.error || 'We could not complete the audit.'}${data.code ? ` Reference: ${data.code}.` : ''}${data.diagnostic ? ` ${data.diagnostic.type || 'Error'}: ${data.diagnostic.message || 'No diagnostic message.'}` : ''}`;
+  if (!invalid.length) return `${data.error || 'We could not complete the audit.'}${data.code ? ` Reference: ${data.code}.` : ''}`;
   return invalid.map(([field, messages]) => `${fieldLabels[field] || field}: ${messages?.[0]}`).join(' ');
 }
 

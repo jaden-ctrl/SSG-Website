@@ -33,11 +33,11 @@ test("Netlify routes the audit lifecycle through native Functions v2 handlers", 
   assert.match(review, /withNetlifyStorage\(context/);
   assert.match(submit, /method: "POST"/);
   assert.match(status, /method: "GET"/);
-  assert.match(review, /method: "POST"/);
+  assert.match(review, /method: \["GET", "POST"\]/);
   assert.match(readiness, /method: "GET"/);
   assert.match(readiness, /\.get\("__readiness__"/);
   assert.match(readiness, /writesPerformed: false/);
-  assert.match(cases, /storageBackend\(\)===\"netlify\"/);
+  assert.match(cases, /storageBackend\(\) === "netlify"/);
   assert.match(cases, /openNetlifyStore\("ssgai-cases"\)/);
   assert.match(leads, /storageBackend\(\) === "netlify"/);
   assert.match(leads, /openNetlifyStore\("ssgai-leads"\)/);
@@ -52,6 +52,11 @@ test("storage runtime uses deploy-scoped Blobs for previews and site-scoped Blob
   await withNetlifyStorage({ deploy: { context: "production" } }, async () => {
     assert.equal(storageBackend(), "netlify");
     assert.equal(storageScope(), "site");
+  });
+
+  await withNetlifyStorage({ deploy: { context: "branch-deploy" } }, async () => {
+    assert.equal(storageBackend(), "netlify");
+    assert.equal(storageScope(), "deploy");
   });
 });
 

@@ -72,7 +72,6 @@ For local HubSpot form testing, copy `.env.example` to `.env.local` and insert y
 Required server-only Netlify variables:
 
 - `OPENAI_API_KEY`
-- `SSGAI_REVIEW_TOKEN`
 - `SSGAI_AGENT_RELEASE_ID` (use an immutable release ID in production)
 
-Optional values are documented in `.env.example`. The temporary reviewer API is `POST /api/admin/reviews`; place it behind SSG staff identity and role authorization before broad production use.
+Optional values are documented in `.env.example`. The private `/review` workspace uses Netlify Identity. Enable Identity, set registration to **Invite only**, invite the SSG reviewer, and assign that account the `ssg-reviewer` role. The review API checks that role server-side for every list, detail, approve, and hold request.

@@ -7,7 +7,7 @@ import { SSGAI_AGENT_RELEASE, SSG_BRAIN_BASELINE } from "../governance/manifest"
 import { intakeSchema } from "../schemas";
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
-const json = (body: unknown, status = 200) => Response.json(body, { status });
+const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
 
 const failureCode = (cause: unknown) => {
   const name = cause instanceof Error ? cause.name : "";
@@ -25,11 +25,6 @@ const failureCode = (cause: unknown) => {
   return "ANALYSIS_FAILED";
 };
 
-const safeDiagnostic = (cause: unknown, request: Request) => {
-  if (!new URL(request.url).hostname.startsWith("deploy-preview-") || !(cause instanceof Error)) return undefined;
-  return { type: cause.name || "Error", message: cause.message.replace(/sk-[A-Za-z0-9_-]+/g, "[redacted-key]").replace(/Bearer\s+\S+/gi, "Bearer [redacted]").replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted-email]").slice(0, 240) };
-};
-
 export async function handleAuditSubmit(request: Request) {
   const caseId = crypto.randomUUID(), accessToken = randomBytes(24).toString("base64url"), started = Date.now();
   let stage = "REQUEST_VALIDATION";
@@ -44,17 +39,17 @@ export async function handleAuditSubmit(request: Request) {
     stage = "LEAD_CAPTURE"; await captureLead(lead); record = transition(record, "AUDIT_CASE_OPENED", "DOMAIN_ANALYSIS"); stage = "CASE_STORAGE"; await cases.save(record);
     try {
       stage = "ATLAS_ANALYSIS"; const previewCandidate = await runAtlasFreeAudit(intake, caseId); record = transition(record, "DOMAIN_ANALYSIS", "QA_PENDING", { previewCandidate }); stage = "REVIEW_QUEUE_STORAGE"; await cases.save(record); stage = "LEAD_UPDATE";
-      try { await captureLead({ ...lead, status: "analyzed", audit: previewCandidate }); } catch (leadCause) { console.error(JSON.stringify({ event: "audit_lead_update_failed", caseId, message: leadCause instanceof Error ? leadCause.message : "unknown" })); }
+      try { await captureLead({ ...lead, status: "analyzed", audit: previewCandidate }); } catch (leadCause) { console.error(JSON.stringify({ event: "audit_lead_update_failed", caseId, error: leadCause instanceof Error ? leadCause.name : "UnknownError" })); }
       console.info(JSON.stringify({ event: "atlas_audit_candidate_ready", caseId, state: record.state, durationMs: Date.now() - started, agentRelease: SSGAI_AGENT_RELEASE.releaseId, brainCandidate: SSG_BRAIN_BASELINE.candidateId }));
       return json({ caseId, accessToken, status: "pending_review", message: "Your analysis is complete and awaiting SSG review before release." }, 202);
     } catch (cause) {
       const originalStage = stage, failedAt = new Date().toISOString();
       record = record.state === "DOMAIN_ANALYSIS" ? transition(record, "DOMAIN_ANALYSIS", "FAILED_RECOVERABLE", { failure: { code: "AGENT_ANALYSIS_FAILED", recordedAt: failedAt } }) : { ...record, state: "FAILED_RECOVERABLE", version: record.version + 1, updatedAt: failedAt, failure: { code: "AUDIT_PIPELINE_FAILED", recordedAt: failedAt } };
-      const cleanup = await Promise.allSettled([cases.save(record), captureLead({ ...lead, status: "analysis_failed" })]); cleanup.forEach((result, index) => { if (result.status === "rejected") console.error(JSON.stringify({ event: "audit_failure_cleanup_failed", caseId, operation: index === 0 ? "case" : "lead", message: result.reason instanceof Error ? result.reason.message : "unknown" })); }); stage = originalStage; throw cause;
+      const cleanup = await Promise.allSettled([cases.save(record), captureLead({ ...lead, status: "analysis_failed" })]); cleanup.forEach((result, index) => { if (result.status === "rejected") console.error(JSON.stringify({ event: "audit_failure_cleanup_failed", caseId, operation: index === 0 ? "case" : "lead", error: result.reason instanceof Error ? result.reason.name : "UnknownError" })); }); stage = originalStage; throw cause;
     }
   } catch (cause) {
     if (cause instanceof ZodError) return json({ error: "Please check the form and try again.", fields: cause.flatten().fieldErrors, caseId }, 400);
-    const code = `${stage}_${failureCode(cause)}`, diagnostic = safeDiagnostic(cause, request); console.error(JSON.stringify({ event: "audit_case_failed", caseId, durationMs: Date.now() - started, stage, code, message: cause instanceof Error ? cause.message : "unknown" }));
-    return json({ error: "SSGAI could not complete the analysis. The case is held for safe follow-up.", code, caseId, ...(diagnostic ? { diagnostic } : {}) }, 500);
+    const code = `${stage}_${failureCode(cause)}`; console.error(JSON.stringify({ event: "audit_case_failed", caseId, durationMs: Date.now() - started, stage, code, error: cause instanceof Error ? cause.name : "UnknownError" }));
+    return json({ error: "SSGAI could not complete the analysis. The case is held for safe follow-up.", code, caseId }, 500);
   }
 }

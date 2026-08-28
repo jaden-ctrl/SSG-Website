@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
+import ReviewAuthRedirect from '@/components/ReviewAuthRedirect';
 
 export const metadata: Metadata = {
   title: { default: 'Shipley Solutions Group | Build. Automate. Scale.', template: '%s | Shipley Solutions Group' },
@@ -12,5 +13,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body><Nav />{children}<Footer /></body></html>;
+  return <html lang="en"><body><ReviewAuthRedirect /><Nav />{children}<Footer /></body></html>;
 }
