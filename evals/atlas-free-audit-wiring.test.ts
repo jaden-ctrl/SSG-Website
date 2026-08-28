@@ -16,13 +16,16 @@ test("Netlify routes the audit lifecycle through native Functions v2 handlers", 
   const submit = await readFile("netlify/functions/audit-submit.ts", "utf8");
   const status = await readFile("netlify/functions/audit-case.ts", "utf8");
   const review = await readFile("netlify/functions/audit-review.ts", "utf8");
+  const readiness = await readFile("netlify/functions/audit-readiness.ts", "utf8");
 
   assert.match(config, /from = "\/api\/audit"/);
   assert.match(config, /from = "\/api\/audit\/:caseId"/);
   assert.match(config, /from = "\/api\/admin\/reviews"/);
+  assert.match(config, /from = "\/api\/audit\/readiness"/);
   assert.match(submit, /export default async function/);
   assert.match(status, /export default async function/);
   assert.match(review, /export default async function/);
+  assert.match(readiness, /writesPerformed: false/);
 });
 
 test("Atlas Free Audit is explicitly non-operational and review-only", async () => {
