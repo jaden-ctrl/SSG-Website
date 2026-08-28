@@ -4,6 +4,17 @@ import { ATLAS_BASE_INSTRUCTIONS } from "./instructions";
 import { getAtlasBrainContext } from "./brain";
 import { atlasResponseSchema, type AtlasRequest, type AtlasResponse } from "./schema";
 import { delegateSpecialistTask } from "./delegation";
+import { withAtlasRuntimeContext } from "./runtime-context";
+import {
+  appendAtlasAuditEvent,
+  completeAtlasRun,
+  createAtlasApproval,
+  createAtlasCase,
+  createAtlasRun,
+  failAtlasRun,
+  getAtlasCase,
+  saveAtlasCase,
+} from "./store";
 
 function buildInstructions() {
   const brain = getAtlasBrainContext();
@@ -43,13 +54,77 @@ function createAtlasAgent() {
   });
 }
 
-export async function runAtlas(request: AtlasRequest): Promise<AtlasResponse> {
+export type AtlasRunResult = {
+  runtime: {
+    caseId: string;
+    runId: string;
+    correlationId: string;
+    approvalId: string | null;
+    state: "active" | "waiting_approval";
+  };
+  output: AtlasResponse;
+};
+
+export async function runAtlas(request: AtlasRequest): Promise<AtlasRunResult> {
   const atlas = createAtlasAgent();
   const brain = getAtlasBrainContext();
+  const requestedBy = request.requestedBy || "internal-owner";
+  const correlationId = crypto.randomUUID();
+
+  let atlasCase = request.caseId ? await getAtlasCase(request.caseId) : null;
+  if (!atlasCase) {
+    atlasCase = await createAtlasCase({
+      caseId: request.caseId,
+      title: request.message.slice(0, 120),
+      objective: request.message,
+      createdBy: requestedBy,
+      metadata: { source: "atlas-api" },
+    });
+    await appendAtlasAuditEvent({
+      eventType: "case.created",
+      caseId: atlasCase.caseId,
+      runId: null,
+      correlationId,
+      actor: requestedBy,
+      payload: { objective: atlasCase.objective },
+    });
+  }
+
+  const runRecord = await createAtlasRun({
+    caseId: atlasCase.caseId,
+    correlationId,
+    requestedBy,
+    mode: request.mode || "architect",
+    objective: request.message,
+    brainVersion: brain.version,
+    brainCandidateId: brain.candidateId,
+    brainLifecycleStatus: brain.releaseStatus,
+  });
+
+  atlasCase = await saveAtlasCase({ ...atlasCase, status: "active", currentRunId: runRecord.runId });
+  await appendAtlasAuditEvent({
+    eventType: "run.started",
+    caseId: atlasCase.caseId,
+    runId: runRecord.runId,
+    correlationId,
+    actor: requestedBy,
+    payload: {
+      mode: request.mode || "architect",
+      brainVersion: brain.version,
+      brainCandidateId: brain.candidateId,
+      brainLifecycleStatus: brain.releaseStatus,
+    },
+  });
+
   const input = JSON.stringify({
     requestedMode: request.mode || "architect",
     objective: request.message,
     suppliedContext: request.context || {},
+    runtimeContext: {
+      caseId: atlasCase.caseId,
+      runId: runRecord.runId,
+      correlationId,
+    },
     governingBrain: {
       version: brain.version,
       documentId: brain.documentId,
@@ -59,10 +134,73 @@ export async function runAtlas(request: AtlasRequest): Promise<AtlasResponse> {
     },
   });
 
-  const result = await run(atlas, `Process this Atlas operating request as structured data:\n${input}`, {
-    maxTurns: Number(process.env.ATLAS_MAX_TURNS || 10),
-  });
+  try {
+    const result = await withAtlasRuntimeContext(
+      { caseId: atlasCase.caseId, runId: runRecord.runId, correlationId, requestedBy },
+      () => run(atlas, `Process this Atlas operating request as structured data:\n${input}`, {
+        maxTurns: Number(process.env.ATLAS_MAX_TURNS || 10),
+      }),
+    );
 
-  if (!result.finalOutput) throw new Error("Atlas returned no final output");
-  return atlasResponseSchema.parse(result.finalOutput);
+    if (!result.finalOutput) throw new Error("Atlas returned no final output");
+    const output = atlasResponseSchema.parse(result.finalOutput);
+    await completeAtlasRun(runRecord, output);
+
+    let approvalId: string | null = null;
+    if (output.ownerApprovalRequired) {
+      const approval = await createAtlasApproval({
+        caseId: atlasCase.caseId,
+        runId: runRecord.runId,
+        action: output.recommendedDecision,
+        reason: output.ownerApprovalReason || "Atlas marked this decision as requiring owner approval.",
+      });
+      approvalId = approval.approvalId;
+      atlasCase = await saveAtlasCase({ ...atlasCase, status: "waiting_approval", currentRunId: runRecord.runId });
+      await appendAtlasAuditEvent({
+        eventType: "approval.requested",
+        caseId: atlasCase.caseId,
+        runId: runRecord.runId,
+        correlationId,
+        actor: "atlas",
+        payload: { approvalId, action: approval.action, reason: approval.reason },
+      });
+    } else {
+      atlasCase = await saveAtlasCase({ ...atlasCase, status: "active", currentRunId: runRecord.runId });
+    }
+
+    await appendAtlasAuditEvent({
+      eventType: "run.completed",
+      caseId: atlasCase.caseId,
+      runId: runRecord.runId,
+      correlationId,
+      actor: "atlas",
+      payload: {
+        ownerApprovalRequired: output.ownerApprovalRequired,
+        recommendedDecision: output.recommendedDecision,
+      },
+    });
+
+    return {
+      runtime: {
+        caseId: atlasCase.caseId,
+        runId: runRecord.runId,
+        correlationId,
+        approvalId,
+        state: output.ownerApprovalRequired ? "waiting_approval" : "active",
+      },
+      output,
+    };
+  } catch (error) {
+    await failAtlasRun(runRecord, error);
+    atlasCase = await saveAtlasCase({ ...atlasCase, status: "blocked", currentRunId: runRecord.runId });
+    await appendAtlasAuditEvent({
+      eventType: "run.failed",
+      caseId: atlasCase.caseId,
+      runId: runRecord.runId,
+      correlationId,
+      actor: "atlas-runtime",
+      payload: { error: error instanceof Error ? error.message.slice(0, 2_000) : "Unknown Atlas runtime failure" },
+    });
+    throw error;
+  }
 }
