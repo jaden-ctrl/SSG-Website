@@ -7,8 +7,8 @@ import { atlasResponseSchema, type AtlasRequest, type AtlasResponse } from "./sc
 function buildInstructions() {
   const brain = getAtlasBrainContext();
   const brainInstructions = brain.status === "loaded" && brain.instructions.trim()
-    ? `\n\nAUTHORITATIVE SSG BRAIN (${brain.version})\n${brain.instructions}`
-    : "\n\nAUTHORITATIVE SSG BRAIN: not loaded yet.";
+    ? `\n\nSSG BRAIN CONTEXT\nVersion: ${brain.version}\nDocument ID: ${brain.documentId}\nCandidate ID: ${brain.candidateId}\nLifecycle status: ${brain.releaseStatus}\nAuthority scope: ${brain.authorityScope}\n\n${brain.instructions}`
+    : "\n\nSSG BRAIN CONTEXT: not loaded yet.";
 
   return `${ATLAS_BASE_INSTRUCTIONS}${brainInstructions}`;
 }
@@ -24,10 +24,18 @@ function createAtlasAgent() {
 
 export async function runAtlas(request: AtlasRequest): Promise<AtlasResponse> {
   const atlas = createAtlasAgent();
+  const brain = getAtlasBrainContext();
   const input = JSON.stringify({
     requestedMode: request.mode || "architect",
     objective: request.message,
     suppliedContext: request.context || {},
+    governingBrain: {
+      version: brain.version,
+      documentId: brain.documentId,
+      candidateId: brain.candidateId,
+      lifecycleStatus: brain.releaseStatus,
+      authorityScope: brain.authorityScope,
+    },
   });
 
   const result = await run(atlas, `Process this Atlas operating request as structured data:\n${input}`, {
