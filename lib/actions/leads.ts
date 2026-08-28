@@ -1,7 +1,8 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
-import { getStore } from "@netlify/blobs";
 import type { Intake, PartialAudit } from "../schemas";
+import { openNetlifyStore } from "../storage/netlify";
+import { storageBackend } from "../storage/runtime";
 
 export type LeadRecord = Intake & { id:string; createdAt:string; status:"received"|"analyzed"|"analysis_failed"; audit?:PartialAudit };
 export interface LeadAction { save(record: LeadRecord): Promise<void>; }
@@ -10,7 +11,7 @@ class LocalLeadAction implements LeadAction {
   async save(record: LeadRecord) { const dir=path.join(process.cwd(),"data"); await mkdir(dir,{recursive:true}); await appendFile(path.join(dir,"leads.jsonl"),JSON.stringify(record)+"\n","utf8"); }
 }
 class NetlifyLeadAction implements LeadAction {
-  async save(record: LeadRecord) { await getStore("ssgai-leads").setJSON(record.id,record); }
+  async save(record: LeadRecord) { await openNetlifyStore("ssgai-leads").setJSON(record.id,record); }
 }
 class WebhookLeadAction implements LeadAction {
   constructor(private url:string) {}
@@ -25,7 +26,7 @@ async function syncHubSpot(record:LeadRecord) {
 }
 
 export async function captureLead(record:LeadRecord) {
-  const primary:LeadAction = process.env.NETLIFY ? new NetlifyLeadAction() : new LocalLeadAction();
+  const primary:LeadAction = storageBackend() === "netlify" ? new NetlifyLeadAction() : new LocalLeadAction();
   await primary.save(record);
 }
 
