@@ -24,12 +24,6 @@ const delegationParametersSchema = z.object({
   task: atlasTaskContractSchema,
 });
 
-const delegationResultSchema = z.object({
-  specialistId: specialistIdSchema,
-  taskId: z.string(),
-  result: specialistOutputSchema,
-});
-
 function selectSpecialist(id: z.infer<typeof specialistIdSchema>) {
   switch (id) {
     case "research-intelligence":
@@ -61,7 +55,6 @@ export const delegateSpecialistTask = tool({
   description:
     "Delegate one bounded task to an Atlas specialist. Every delegation must use a validated task contract with explicit scope, constraints, allowed tools, prohibited actions, approvals, outputs, and evidence requirements.",
   parameters: delegationParametersSchema,
-  outputSchema: delegationResultSchema,
   async execute({ specialistId, task }) {
     const validatedTask = atlasTaskContractSchema.parse(task);
     const specialist = selectSpecialist(specialistId);
@@ -95,11 +88,11 @@ export const delegateSpecialistTask = tool({
         escalationReason: parsed.escalationReason,
       });
 
-      return {
+      return JSON.stringify({
         specialistId,
         taskId: validatedTask.taskId,
         result: parsed,
-      };
+      });
     } catch (error) {
       await audit("task.failed", {
         specialistId,
