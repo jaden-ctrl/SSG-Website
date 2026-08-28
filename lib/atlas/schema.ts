@@ -39,6 +39,8 @@ export const atlasRequestSchema = z.object({
   message: z.string().min(1).max(20_000),
   context: z.record(z.string(), z.unknown()).optional(),
   mode: atlasModeSchema.optional(),
+  caseId: z.string().min(1).max(200).optional(),
+  requestedBy: z.string().min(1).max(200).optional(),
 });
 
 export type AtlasRequest = z.infer<typeof atlasRequestSchema>;
