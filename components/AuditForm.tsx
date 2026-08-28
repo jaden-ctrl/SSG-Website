@@ -11,7 +11,7 @@ export default function AuditForm() {
     if (sending) return;
 
     setSending(true);
-    setStatus('Sending your business data to the SSG Brain…');
+    setStatus('Sending your business data to Atlas…');
 
     const form = e.currentTarget;
     const data = Object.fromEntries(new FormData(form).entries());
@@ -37,14 +37,14 @@ export default function AuditForm() {
       const result = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setStatus(result?.error || 'The SSG Brain is not available yet. Please try again later.');
+        setStatus(result?.error || 'Atlas is not available yet. Please try again later.');
         return;
       }
 
       form.reset();
       setStatus('Your audit has been generated.');
     } catch {
-      setStatus('Something went wrong while connecting to the SSG Brain. Please try again.');
+      setStatus('Something went wrong while connecting to Atlas. Please try again.');
     } finally {
       setSending(false);
     }

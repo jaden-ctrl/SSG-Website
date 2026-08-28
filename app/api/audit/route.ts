@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(
     {
       ok: false,
-      error: 'The SSG Brain is being configured. The Free Audit will be available soon.',
+      error: 'Atlas is being configured. The Free Audit will be available soon.',
       code: 'SSG_BRAIN_NOT_CONFIGURED',
     },
     { status: 503 },
