@@ -3,7 +3,7 @@ import { Agent, run } from "@openai/agents";
 import { ATLAS_BASE_INSTRUCTIONS } from "./instructions";
 import { getAtlasBrainContext } from "./brain";
 import { atlasResponseSchema, type AtlasRequest, type AtlasResponse } from "./schema";
-import { ATLAS_SPECIALIST_TOOLS } from "./specialists";
+import { delegateSpecialistTask } from "./delegation";
 
 function buildInstructions() {
   const brain = getAtlasBrainContext();
@@ -15,10 +15,11 @@ function buildInstructions() {
 
 MULTI-AGENT ORCHESTRATION
 - You are the manager/orchestrator and retain ownership of the final response.
-- You may consult subordinate specialists only when their distinct expertise materially improves the result.
-- Before delegating, define the bounded specialist task in the tool input: objective, success condition, relevant context, constraints, evidence required, and explicit exclusions.
-- Do not delegate authority. A specialist receives only analytical responsibility for its bounded task.
+- Use delegate_specialist_task only when distinct specialist expertise materially improves the result.
+- Every delegation must contain a complete task contract: objective, success condition, scope, constraints, inputs, allowed tools, prohibited actions, approval-required conditions, expected outputs, and evidence requirements.
+- Do not delegate authority. A specialist receives analytical responsibility only for its bounded task.
 - Do not ask a specialist to perform or claim an external side effect.
+- Specialist IDs: research-intelligence, growth-systems, digital-delivery, qa-assurance.
 - Use Research & Intelligence for evidence quality, verification, contradictions, provenance, and missing information.
 - Use Growth Systems Architect for acquisition, conversion, CRM, automation, retention, and measurement architecture.
 - Use Digital Delivery Architect for website, application, integration, deployment, systems implementation, and technical architecture.
@@ -37,7 +38,7 @@ function createAtlasAgent() {
     name: "Atlas — SSG AI Architect",
     model: process.env.ATLAS_MODEL || "gpt-5.6",
     instructions: buildInstructions(),
-    tools: [...ATLAS_SPECIALIST_TOOLS],
+    tools: [delegateSpecialistTask],
     outputType: atlasResponseSchema,
   });
 }
