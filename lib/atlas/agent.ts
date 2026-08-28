@@ -1,4 +1,3 @@
-import "server-only";
 import { Agent, run } from "@openai/agents";
 import { ATLAS_BASE_INSTRUCTIONS } from "./instructions";
 import { getAtlasBrainContext } from "./brain";

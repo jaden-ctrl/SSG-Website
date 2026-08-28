@@ -1,0 +1,17 @@
+[[redirects]]
+  from = "/api/audit/:caseId"
+  to = "/.netlify/functions/audit-case?caseId=:caseId"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/admin/reviews"
+  to = "/.netlify/functions/audit-review"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/audit"
+  to = "/.netlify/functions/audit-submit"
+  status = 200
+  force = true

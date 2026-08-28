@@ -1,8 +1,7 @@
-import "server-only";
 import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { getStore } from "@netlify/blobs";
-import type { Intake, PartialAudit } from "@/lib/schemas";
+import type { Intake, PartialAudit } from "../schemas";
 
 export type LeadRecord = Intake & { id:string; createdAt:string; status:"received"|"analyzed"|"analysis_failed"; audit?:PartialAudit };
 export interface LeadAction { save(record: LeadRecord): Promise<void>; }

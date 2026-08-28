@@ -1,4 +1,3 @@
-import "server-only";
 import { Agent } from "@openai/agents";
 import { z } from "zod";
 import { getAtlasBrainContext } from "./brain";

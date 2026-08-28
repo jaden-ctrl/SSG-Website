@@ -1,4 +1,3 @@
-import "server-only";
 import { getStore } from "@netlify/blobs";
 import {
   atlasApprovalSchema,

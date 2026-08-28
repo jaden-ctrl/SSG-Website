@@ -1,4 +1,3 @@
-import "server-only";
 import { run, tool } from "@openai/agents";
 import { z } from "zod";
 import { atlasTaskContractSchema } from "./task-contract";

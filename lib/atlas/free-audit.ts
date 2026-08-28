@@ -1,6 +1,5 @@
-import "server-only";
 import { Agent, run } from "@openai/agents";
-import { partialAuditSchema, type Intake, type PartialAudit } from "@/lib/schemas";
+import { partialAuditSchema, type Intake, type PartialAudit } from "../schemas";
 import { buildAtlasInstructions } from "./agent";
 
 const FREE_AUDIT_INSTRUCTIONS = `

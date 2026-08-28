@@ -1,9 +1,8 @@
-import "server-only";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getStore } from "@netlify/blobs";
-import type { Intake, PartialAudit } from "@/lib/schemas";
-import { SSGAI_AGENT_RELEASE, SSG_BRAIN_BASELINE } from "@/lib/governance/manifest";
+import type { Intake, PartialAudit } from "../schemas";
+import { SSGAI_AGENT_RELEASE, SSG_BRAIN_BASELINE } from "../governance/manifest";
 
 export type CaseState = "PROSPECT_RECEIVED"|"CONSENT_AND_AUTHORITY_RECORDED"|"INTAKE_VALIDATED"|"AUDIT_CASE_OPENED"|"DOMAIN_ANALYSIS"|"QA_PENDING"|"PREVIEW_APPROVED"|"PREVIEW_RELEASED"|"NEEDS_CLIENT_INPUT"|"MANUAL_REVIEW"|"FAILED_RECOVERABLE";
 export type AuditCase = { caseId:string;tenantId:string;accessTokenHash:string;version:number;state:CaseState;createdAt:string;updatedAt:string;intake:Intake;inputSnapshotHash:string;consent:{noticeVersion:string;purpose:string;recordedAt:string};governance:typeof SSG_BRAIN_BASELINE & typeof SSGAI_AGENT_RELEASE;previewCandidate?:PartialAudit;releasedPreview?:PartialAudit;review?:{reviewer:string;decision:"approved"|"rejected";decidedAt:string;notes?:string};failure?:{code:string;recordedAt:string} };

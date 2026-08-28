@@ -6,7 +6,12 @@ on:
       - atlas-agent-v1
     paths:
       - "lib/atlas/**"
+      - "lib/audit/**"
       - "app/api/atlas/**"
+      - "app/api/audit/**"
+      - "app/api/admin/reviews/**"
+      - "netlify/functions/**"
+      - "netlify.toml"
       - "evals/**"
       - "package.json"
       - "tsconfig.json"
@@ -14,7 +19,12 @@ on:
   pull_request:
     paths:
       - "lib/atlas/**"
+      - "lib/audit/**"
       - "app/api/atlas/**"
+      - "app/api/audit/**"
+      - "app/api/admin/reviews/**"
+      - "netlify/functions/**"
+      - "netlify.toml"
       - "evals/**"
       - "package.json"
       - "tsconfig.json"
