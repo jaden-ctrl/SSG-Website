@@ -2,6 +2,8 @@ import "server-only";
 import { run, tool } from "@openai/agents";
 import { z } from "zod";
 import { atlasTaskContractSchema } from "./task-contract";
+import { getAtlasRuntimeContext } from "./runtime-context";
+import { appendAtlasAuditEvent } from "./store";
 import {
   digitalDeliveryAgent,
   growthSystemsAgent,
@@ -41,6 +43,19 @@ function selectSpecialist(id: z.infer<typeof specialistIdSchema>) {
   }
 }
 
+async function audit(eventType: "task.delegated" | "task.completed" | "task.failed", payload: Record<string, unknown>) {
+  const context = getAtlasRuntimeContext();
+  if (!context) return;
+  await appendAtlasAuditEvent({
+    eventType,
+    caseId: context.caseId,
+    runId: context.runId,
+    correlationId: context.correlationId,
+    actor: "atlas",
+    payload,
+  });
+}
+
 export const delegateSpecialistTask = tool({
   name: "delegate_specialist_task",
   description:
@@ -51,20 +66,47 @@ export const delegateSpecialistTask = tool({
     const validatedTask = atlasTaskContractSchema.parse(task);
     const specialist = selectSpecialist(specialistId);
 
-    const result = await run(
-      specialist,
-      `Execute this subordinate task contract exactly as provided. Do not broaden scope or authority.\n${JSON.stringify(validatedTask)}`,
-      { maxTurns: Number(process.env.ATLAS_SPECIALIST_MAX_TURNS || 5) },
-    );
-
-    if (!result.finalOutput) {
-      throw new Error(`Atlas specialist ${specialistId} returned no final output`);
-    }
-
-    return {
+    await audit("task.delegated", {
       specialistId,
       taskId: validatedTask.taskId,
-      result: specialistOutputSchema.parse(result.finalOutput),
-    };
+      objective: validatedTask.objective,
+      successCondition: validatedTask.successCondition,
+      allowedTools: validatedTask.allowedTools,
+      prohibitedActions: validatedTask.prohibitedActions,
+    });
+
+    try {
+      const result = await run(
+        specialist,
+        `Execute this subordinate task contract exactly as provided. Do not broaden scope or authority.\n${JSON.stringify(validatedTask)}`,
+        { maxTurns: Number(process.env.ATLAS_SPECIALIST_MAX_TURNS || 5) },
+      );
+
+      if (!result.finalOutput) {
+        throw new Error(`Atlas specialist ${specialistId} returned no final output`);
+      }
+
+      const parsed = specialistOutputSchema.parse(result.finalOutput);
+      await audit("task.completed", {
+        specialistId,
+        taskId: validatedTask.taskId,
+        confidence: parsed.confidence,
+        escalationRequired: parsed.escalationRequired,
+        escalationReason: parsed.escalationReason,
+      });
+
+      return {
+        specialistId,
+        taskId: validatedTask.taskId,
+        result: parsed,
+      };
+    } catch (error) {
+      await audit("task.failed", {
+        specialistId,
+        taskId: validatedTask.taskId,
+        error: error instanceof Error ? error.message.slice(0, 2_000) : "Unknown specialist failure",
+      });
+      throw error;
+    }
   },
 });
