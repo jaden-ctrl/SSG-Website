@@ -5,6 +5,19 @@ import type { PartialAudit } from '@/lib/schemas';
 
 type PendingCase = { caseId: string; accessToken: string; message: string };
 
+const fieldLabels: Record<string, string> = {
+  firstName: 'First name', lastName: 'Last name', email: 'Work email', company: 'Company',
+  website: 'Website', teamSize: 'Team size', offer: 'What the business sells',
+  challenge: 'Biggest challenge', goal: '12-month goal', revenueRange: 'Annual revenue',
+  consent: 'Audit consent',
+};
+
+function responseError(data: { error?: string; fields?: Record<string, string[] | undefined> }) {
+  const invalid = Object.entries(data.fields || {}).filter(([, messages]) => messages?.length);
+  if (!invalid.length) return data.error || 'We could not complete the audit.';
+  return invalid.map(([field, messages]) => `${fieldLabels[field] || field}: ${messages?.[0]}`).join(' ');
+}
+
 function normalizeWebsite(value: FormDataEntryValue | null) {
   if (typeof value !== 'string') return '';
   const trimmed = value.trim();
@@ -27,7 +40,7 @@ export default function AuditForm() {
       payload.website = normalizeWebsite(formData.get('website'));
       const response = await fetch('/api/audit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'We could not complete the audit.');
+      if (!response.ok) throw new Error(responseError(data));
       if (response.status === 202) setPending(data);
       else setAudit(data.audit);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unexpected error.'); }
@@ -50,10 +63,10 @@ export default function AuditForm() {
       <label>Website<input name="website" type="text" inputMode="url" placeholder="example.com" maxLength={300} /></label>
       <label>Team size<select name="teamSize" required defaultValue=""><option value="" disabled>Select</option><option>1</option><option>2-10</option><option>11-50</option><option>51-200</option><option>201+</option></select></label>
     </div>
-    <label>What does the business sell?<textarea name="offer" required maxLength={1200} /></label>
-    <label>What is the biggest growth or operational challenge?<textarea name="challenge" required maxLength={1600} /></label>
+    <label>What does the business sell?<textarea name="offer" required minLength={10} maxLength={1200} /></label>
+    <label>What is the biggest growth or operational challenge?<textarea name="challenge" required minLength={10} maxLength={1600} /></label>
     <label>What have you already tried?<textarea name="attempts" maxLength={1200} /></label>
-    <label>Primary goal for the next 12 months<textarea name="goal" required maxLength={1200} /></label>
+    <label>Primary goal for the next 12 months<textarea name="goal" required minLength={10} maxLength={1200} /></label>
     <label>Approximate annual revenue<select name="revenueRange" required defaultValue=""><option value="" disabled>Select</option><option>Pre-revenue</option><option>Under $250K</option><option>$250K-$1M</option><option>$1M-$5M</option><option>$5M-$20M</option><option>$20M+</option><option>Prefer not to say</option></select></label>
     <label><span><input name="consent" type="checkbox" value="true" required style={{ width: 'auto', marginRight: 8 }} />I agree to the audit notice and to be contacted about this request.</span></label>
     <input name="faxNumber" tabIndex={-1} autoComplete="off" aria-hidden="true" className="honeypot" />
