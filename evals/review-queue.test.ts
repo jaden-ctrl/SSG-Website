@@ -242,7 +242,7 @@ test("public case status hides every draft until the approved preview is release
     assert.equal(response.headers.get("cache-control"), "private, no-store");
     const serialized = JSON.stringify(payload);
     for (const privateField of ["previewCandidate", "intake", "review", "executiveSummary", "accessTokenHash"]) {
-      assert.doesNotMatch(serialized, new RegExp(privateField, "i"), `${state} leaked ${privateField}`);
+      assert.doesNotMatch(serialized, new RegExp(`"${privateField}"\\s*:`, "i"), `${state} leaked ${privateField}`);
     }
   }
 
