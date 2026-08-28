@@ -1,12 +1,17 @@
 import { z } from "zod";
 
+export const atlasTaskInputSchema = z.object({
+  key: z.string().min(1),
+  value: z.string(),
+});
+
 export const atlasTaskContractSchema = z.object({
   taskId: z.string().min(1),
   objective: z.string().min(1),
   successCondition: z.string().min(1),
   scope: z.array(z.string()).default([]),
   constraints: z.array(z.string()).default([]),
-  inputs: z.record(z.string(), z.unknown()).default({}),
+  inputs: z.array(atlasTaskInputSchema).default([]),
   allowedTools: z.array(z.string()).default([]),
   prohibitedActions: z.array(z.string()).default([]),
   approvalRequiredFor: z.array(z.string()).default([]),
