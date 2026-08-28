@@ -14,7 +14,7 @@ export default function Audit() {
               Find where your growth system is leaking.
             </h1>
             <p className="lead">
-              This is a diagnostic review, not a sales call disguised as a form. Atlas will use your answers to evaluate how prospects find you, convert, enter your pipeline and get followed up with — then identify the highest-leverage fixes.
+              This is a diagnostic review, not a sales call disguised as a form. The SSG Brain will use your answers to evaluate how prospects find you, convert, enter your pipeline and get followed up with — then identify the highest-leverage fixes.
             </p>
 
             <div className="audit-points">
@@ -43,7 +43,7 @@ export default function Audit() {
           <div className="card audit-card">
             <span className="eyebrow">Diagnostic intake</span>
             <h2 style={{ marginTop: 18 }}>Request your audit</h2>
-            <p className="muted">Give Atlas enough context to make the review useful. No giant questionnaire.</p>
+            <p className="muted">Give the SSG Brain enough context to make the review useful. No giant questionnaire.</p>
             <AuditForm />
           </div>
         </div>
