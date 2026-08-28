@@ -19,7 +19,7 @@ FREE AUDIT MODE
 function createAtlasFreeAuditAgent() {
   return new Agent({
     name: "Atlas — SSG Free Audit Diagnostician",
-    model: process.env.ATLAS_MODEL || process.env.SSGAI_MODEL || "gpt-5.6",
+    model: process.env.ATLAS_FREE_AUDIT_MODEL || process.env.SSGAI_MODEL || "gpt-5-mini",
     instructions: `${buildAtlasInstructions()}${FREE_AUDIT_INSTRUCTIONS}`,
     outputType: partialAuditSchema,
   });
