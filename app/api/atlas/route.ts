@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { runAtlas } from "@/lib/atlas/agent";
+import { getAtlasBrainContext } from "@/lib/atlas/brain";
 import { atlasRequestSchema } from "@/lib/atlas/schema";
 
 export const runtime = "nodejs";
@@ -13,11 +14,17 @@ function authorized(request: Request) {
 }
 
 export async function GET() {
+  const brain = getAtlasBrainContext();
   return NextResponse.json({
     name: "Atlas",
     role: "SSG AI Architect",
-    status: "ready",
-    brain: "pending-latest-ssg-brain",
+    status: "build-candidate",
+    persistence: "netlify-blobs",
+    brain: {
+      version: brain.version,
+      candidateId: brain.candidateId,
+      lifecycleStatus: brain.releaseStatus,
+    },
   });
 }
 
