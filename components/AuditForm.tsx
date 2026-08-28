@@ -1,130 +1,74 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
+import type { PartialAudit } from '@/lib/schemas';
+
+type PendingCase = { caseId: string; accessToken: string; message: string };
+
+function normalizeWebsite(value: FormDataEntryValue | null) {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
 
 export default function AuditForm() {
-  const [status, setStatus] = useState('');
-  const [sending, setSending] = useState(false);
+  const [audit, setAudit] = useState<PartialAudit | null>(null);
+  const [pending, setPending] = useState<PendingCase | null>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  async function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (sending) return;
-
-    setSending(true);
-    setStatus('Sending your business data to the SSG Brain…');
-
-    const form = e.currentTarget;
-    const data = Object.fromEntries(new FormData(form).entries());
-    const params = new URLSearchParams(window.location.search);
-
-    const payload = {
-      ...data,
-      source: 'free-business-audit',
-      form_variant: 'audit',
-      utm_source: params.get('utm_source') || '',
-      utm_medium: params.get('utm_medium') || '',
-      utm_campaign: params.get('utm_campaign') || '',
-      landing_page: window.location.href,
-    };
-
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoading(true); setError(''); setAudit(null);
     try {
-      const res = await fetch('/api/audit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const result = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        setStatus(result?.error || 'The SSG Brain is not available yet. Please try again later.');
-        return;
-      }
-
-      form.reset();
-      setStatus('Your audit has been generated.');
-    } catch {
-      setStatus('Something went wrong while connecting to the SSG Brain. Please try again.');
-    } finally {
-      setSending(false);
-    }
+      const formData = new FormData(event.currentTarget);
+      const payload = Object.fromEntries(formData);
+      payload.website = normalizeWebsite(formData.get('website'));
+      const response = await fetch('/api/audit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'We could not complete the audit.');
+      if (response.status === 202) setPending(data);
+      else setAudit(data.audit);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unexpected error.'); }
+    finally { setLoading(false); }
   }
 
-  return (
-    <form className="form" onSubmit={submit}>
-      <div className="form-row">
-        <label>
-          First name
-          <input name="first_name" required autoComplete="given-name" />
-        </label>
-        <label>
-          Last name
-          <input name="last_name" required autoComplete="family-name" />
-        </label>
-      </div>
+  if (pending) return <PendingReview pending={pending} onReleased={(value) => { setAudit(value); setPending(null); }} />;
+  if (audit) return <AuditResults audit={audit} />;
 
-      <div className="form-row">
-        <label>
-          Email
-          <input name="email" required type="email" autoComplete="email" />
-        </label>
-        <label>
-          Phone
-          <input name="phone" type="tel" autoComplete="tel" />
-        </label>
-      </div>
+  return <form className="form" onSubmit={submit}>
+    <div className="form-row">
+      <label>First name<input name="firstName" required maxLength={80} autoComplete="given-name" /></label>
+      <label>Last name<input name="lastName" required maxLength={80} autoComplete="family-name" /></label>
+    </div>
+    <div className="form-row">
+      <label>Work email<input name="email" type="email" required maxLength={200} autoComplete="email" /></label>
+      <label>Company<input name="company" required maxLength={160} autoComplete="organization" /></label>
+    </div>
+    <div className="form-row">
+      <label>Website<input name="website" type="text" inputMode="url" placeholder="example.com" maxLength={300} /></label>
+      <label>Team size<select name="teamSize" required defaultValue=""><option value="" disabled>Select</option><option>1</option><option>2-10</option><option>11-50</option><option>51-200</option><option>201+</option></select></label>
+    </div>
+    <label>What does the business sell?<textarea name="offer" required maxLength={1200} /></label>
+    <label>What is the biggest growth or operational challenge?<textarea name="challenge" required maxLength={1600} /></label>
+    <label>What have you already tried?<textarea name="attempts" maxLength={1200} /></label>
+    <label>Primary goal for the next 12 months<textarea name="goal" required maxLength={1200} /></label>
+    <label>Approximate annual revenue<select name="revenueRange" required defaultValue=""><option value="" disabled>Select</option><option>Pre-revenue</option><option>Under $250K</option><option>$250K-$1M</option><option>$1M-$5M</option><option>$5M-$20M</option><option>$20M+</option><option>Prefer not to say</option></select></label>
+    <label><span><input name="consent" type="checkbox" value="true" required style={{ width: 'auto', marginRight: 8 }} />I agree to the audit notice and to be contacted about this request.</span></label>
+    <input name="faxNumber" tabIndex={-1} autoComplete="off" aria-hidden="true" className="honeypot" />
+    <button className="btn btn-primary" disabled={loading}>{loading ? 'SSGAI is analyzing…' : 'Run my free audit'}</button>
+    <p className="muted">SSGAI drafts the preview from your submitted information. An SSG reviewer must approve it before release.</p>
+    {error && <div className="form-status" role="alert">{error}</div>}
+  </form>;
+}
 
-      <label>
-        Company
-        <input name="company" required />
-      </label>
+function PendingReview({ pending, onReleased }: { pending: PendingCase; onReleased: (audit: PartialAudit) => void }) {
+  const [message, setMessage] = useState(pending.message); const [checking, setChecking] = useState(false);
+  async function check() { setChecking(true); try { const response = await fetch(`/api/audit/${pending.caseId}`, { headers: { authorization: `Bearer ${pending.accessToken}` } }); const data = await response.json(); if (data.status === 'released') onReleased(data.audit); else setMessage(data.message || 'Still awaiting review.'); } finally { setChecking(false); } }
+  return <div className="audit-results"><div className="eyebrow">Case received</div><h2>Your preview is awaiting SSG review.</h2><p>{message}</p><p className="audit-case-note">Case reference: {pending.caseId}. Independent review is required before release.</p><button className="btn btn-primary" onClick={check} disabled={checking}>{checking ? 'Checking…' : 'Check review status'}</button></div>;
+}
 
-      <label>
-        Website or primary online presence
-        <input name="website" placeholder="https://" required />
-      </label>
-
-      <div className="form-row">
-        <label>
-          Primary growth concern
-          <select name="growth_concern" defaultValue="" required>
-            <option value="" disabled>Select one</option>
-            <option>Website is not converting</option>
-            <option>Not enough qualified leads</option>
-            <option>Follow-up is inconsistent</option>
-            <option>CRM / pipeline is disorganized</option>
-            <option>Too much manual work</option>
-            <option>Need stronger local visibility</option>
-            <option>Not sure — need diagnosis</option>
-          </select>
-        </label>
-        <label>
-          Approximate monthly lead volume
-          <select name="monthly_leads" defaultValue="">
-            <option value="" disabled>Select range</option>
-            <option>0–10</option>
-            <option>11–30</option>
-            <option>31–100</option>
-            <option>100+</option>
-            <option>Not sure</option>
-          </select>
-        </label>
-      </div>
-
-      <label>
-        Where do leads currently go after they contact you?
-        <input name="lead_flow" placeholder="Example: email inbox, spreadsheet, HubSpot, phone only" />
-      </label>
-
-      <label>
-        What feels like the biggest leak right now?
-        <textarea name="message" required />
-      </label>
-
-      <button className="btn btn-primary" type="submit" disabled={sending}>
-        {sending ? 'Analyzing…' : 'Request My Free Audit'}
-      </button>
-      <div className="form-status" aria-live="polite">{status}</div>
-    </form>
-  );
+function AuditResults({ audit }: { audit: PartialAudit }) {
+  return <div className="audit-results"><div className="eyebrow">Your approved SSGAI preview</div><div className="audit-score"><strong>{audit.overallScore}</strong><span>/ 100 readiness</span></div><h2>{audit.executiveSummary}</h2>{audit.findings.map((item) => <article className="audit-finding" key={item.dimension}><span className="pill">{item.dimension} · {item.score}/100</span><h3>{item.title}</h3><p>{item.observation}</p><p><strong>Next move:</strong> {item.recommendation}</p></article>)}<h3>30-day priority</h3><p>{audit.thirtyDayPriority}</p><p className="muted">Confidence: {audit.confidence}. Evidence gaps: {audit.evidenceGaps.join('; ')}</p><a className="btn btn-primary" href={process.env.NEXT_PUBLIC_FULL_AUDIT_URL || '/contact'}>Get the full SSG audit</a></div>;
 }
