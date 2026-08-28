@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { ArrowRight, Bot, ChartNoAxesCombined, Check, Code2, DatabaseZap, Search, Workflow } from 'lucide-react';
 import { CountUp, Reveal } from '@/components/Motion';
-import OperatingFramework from '@/components/OperatingFramework';
+import AtlasBrain from '@/components/AtlasBrain';
+import AtlasFramework from '@/components/AtlasFramework';
 
 const services = [
   [Code2, 'Websites & Digital Presence', 'High-converting websites engineered around clarity, speed, trust and measurable action.'],
@@ -13,7 +14,7 @@ const services = [
 ];
 
 const journey = [
-  ['Free Audit', 'Give the SSG Brain the context to examine your current growth system.'],
+  ['Free Audit', 'Give Atlas the context to examine your current growth system.'],
   ['Diagnosis', 'Identify the constraint, the leaks and the highest-leverage opportunities.'],
   ['Strategy', 'Turn the findings into a focused roadmap with clear priorities.'],
   ['Implementation', 'Build the website, CRM, automation, AI and workflows that make it real.'],
@@ -30,11 +31,7 @@ export default function Home() {
         <div className="hero-actions"><Link className="btn btn-primary" href="/audit">Get a Free Business Audit <ArrowRight size={18}/></Link><Link className="btn btn-secondary" href="/services">Explore Solutions</Link></div>
         <div className="hero-proof"><span><b>Strategy + execution</b> in one partner</span><span><b>Built for ROI</b>, not vanity metrics</span></div>
       </div>
-      <div className="hero-visual" aria-label="The SSG Growth System turns demand into measurable growth">
-        <div className="orb" />
-        <div className="hero-card main"><span className="pill">SSG GROWTH SYSTEM</span><div className="growth-system-title">From scattered tools to one operating engine.</div><div className="flow">{['Capture demand','Qualify the opportunity','Route into CRM','Automate follow-up','Measure & optimize'].map((x,i)=><div className="flow-step" key={x}><span><i className="step-dot"/> {x}</span><small>0{i+1}</small></div>)}</div></div>
-        <div className="hero-card mini"><div className="muted system-label">SYSTEM LEVERAGE</div><div className="metric">24/7</div><div className="muted system-caption">Your systems keep working when you are not.</div></div>
-      </div>
+      <AtlasBrain />
     </div></section>
 
     <section className="proof-strip"><div className="container proof-grid">
@@ -50,7 +47,12 @@ export default function Home() {
 
     <section className="section framework-section"><div className="container">
       <Reveal><div className="eyebrow">Our operating framework</div><h2 className="h2">One system. Seven connected stages.</h2><p className="lede">As you move through the framework, each stage becomes the focus—because sustainable growth comes from the handoffs between them, not a single isolated tactic.</p></Reveal>
-      <OperatingFramework />
+      <AtlasFramework />
+    </div></section>
+
+    <section className="section atlas-reveal-section"><div className="container atlas-reveal">
+      <Reveal><div className="atlas-mark" aria-hidden="true"><span>A</span></div></Reveal>
+      <Reveal delay={100}><div><div className="eyebrow">Meet Atlas</div><h2 className="h2">Intelligence that sees the whole system.</h2><p className="lede">Atlas is SSG’s growth intelligence layer—built to connect what your business knows, identify what is slowing it down and turn insight into a clear next move.</p><div className="atlas-capabilities"><span>Diagnoses constraints</span><span>Connects signals</span><span>Prioritizes action</span></div><Link href="/audit" className="btn btn-primary">Start with Atlas <ArrowRight size={18}/></Link></div></Reveal>
     </div></section>
 
     <section className="section journey-section"><div className="container">
