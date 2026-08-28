@@ -43,7 +43,7 @@ test("task contract accepts explicit bounded delegation", () => {
     successCondition: "Return material defects and hold/release criteria",
     scope: ["release candidate"],
     constraints: ["no production changes"],
-    inputs: {},
+    inputs: [{ key: "candidate", value: "atlas-agent-v1" }],
     allowedTools: ["read"],
     prohibitedActions: ["production_release"],
     approvalRequiredFor: ["production_release"],
