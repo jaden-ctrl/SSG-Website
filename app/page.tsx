@@ -3,6 +3,7 @@ import { ArrowRight, Bot, ChartNoAxesCombined, Check, Code2, DatabaseZap, Search
 import { CountUp, Reveal } from '@/components/Motion';
 import AtlasBrain from '@/components/AtlasBrain';
 import AtlasFramework from '@/components/AtlasFramework';
+import AtlasReveal from '@/components/AtlasReveal';
 
 const services = [
   [Code2, 'Websites & Digital Presence', 'High-converting websites engineered around clarity, speed, trust and measurable action.'],
@@ -23,7 +24,7 @@ const journey = [
 
 export default function Home() {
   return <main>
-    <section className="hero"><div className="container hero-grid">
+    <section className="hero cinematic-hero"><div className="container hero-grid">
       <div className="hero-copy">
         <div className="eyebrow">Systems for serious growth · V4</div>
         <h1 className="display">Build smarter.<br/><span className="blue">Convert more.</span><br/>Scale faster.</h1>
@@ -46,13 +47,12 @@ export default function Home() {
     </div></section>
 
     <section className="section framework-section"><div className="container">
-      <Reveal><div className="eyebrow">Our operating framework</div><h2 className="h2">One system. Seven connected stages.</h2><p className="lede">As you move through the framework, each stage becomes the focus—because sustainable growth comes from the handoffs between them, not a single isolated tactic.</p></Reveal>
+      <Reveal><div className="eyebrow">Our operating framework</div><h2 className="h2">One system. Seven connected stages.</h2><p className="lede">Follow the energy through the system. Each stage activates in sequence because sustainable growth is created by the handoffs between them—not one isolated tactic.</p></Reveal>
       <AtlasFramework />
     </div></section>
 
-    <section className="section atlas-reveal-section"><div className="container atlas-reveal">
-      <Reveal><div className="atlas-mark" aria-hidden="true"><span>A</span></div></Reveal>
-      <Reveal delay={100}><div><div className="eyebrow">Meet Atlas</div><h2 className="h2">Intelligence that sees the whole system.</h2><p className="lede">Atlas is SSG’s growth intelligence layer—built to connect what your business knows, identify what is slowing it down and turn insight into a clear next move.</p><div className="atlas-capabilities"><span>Diagnoses constraints</span><span>Connects signals</span><span>Prioritizes action</span></div><Link href="/audit" className="btn btn-primary">Start with Atlas <ArrowRight size={18}/></Link></div></Reveal>
+    <section className="section atlas-reveal-section"><div className="container">
+      <AtlasReveal />
     </div></section>
 
     <section className="section journey-section"><div className="container">
