@@ -2,25 +2,33 @@
   "name": "shipley-solutions-group-website",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "atlas:test": "tsx --test evals/*.test.ts",
+    "atlas:verify": "npm run typecheck && npm run atlas:test && npm run build"
   },
   "dependencies": {
+    "@netlify/blobs": "^10.0.10",
+    "@netlify/identity": "2.0.0",
+    "@openai/agents": "^0.3.6",
     "lucide-react": "^0.468.0",
     "next": "^15.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "@netlify/blobs": "^10.0.10",
-    "@openai/agents": "^0.3.6",
     "zod": "^4.1.5"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "tsx": "^4.20.0",
     "typescript": "^5.7.0"
   }
 }
