@@ -195,6 +195,12 @@ textarea { min-height:140px; resize:vertical; }
 .cta-copy { margin:0; }
 .about-hero { background:radial-gradient(circle at 80% 20%, rgba(24,86,253,.18), transparent 32%); }
 .about-display { font-size:clamp(2.8rem,7vw,5.2rem); }
+.founder-section { align-items:start; gap:32px 56px; }
+.founder-name { color:#8fa9ff; text-decoration:underline; text-decoration-thickness:.04em; text-underline-offset:.12em; }
+.founder-name:hover { color:#b8c9ff; }
+.founder-name:focus-visible { outline:2px solid #8fa9ff; outline-offset:6px; border-radius:2px; }
+.founder-role { margin:0; color:var(--muted); }
+.founder-section .lede { margin-top:0; }
 .definition-card { padding:35px; }
 .definition-card h3 { font-size:1.65rem; line-height:1.2; margin-top:22px; }
 .approach-card { height:100%; display:grid; grid-template-columns:auto 1fr; gap:18px; }
