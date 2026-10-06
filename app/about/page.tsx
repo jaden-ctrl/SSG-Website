@@ -2,7 +2,11 @@ import Link from 'next/link';
 import { ArrowRight, CheckCircle2, Compass, Hammer, LineChart, Network } from 'lucide-react';
 import { Reveal } from '@/components/Motion';
 
-export const metadata = { title: 'About' };
+export const metadata = {
+  title: 'About & Founder Jaden Shipley',
+  description: 'Meet Jaden Shipley, Founder & CEO of Shipley Solutions Group Inc., and learn how SSG connects business strategy with websites, CRM systems and automation.',
+  alternates: { canonical: 'https://shipleysolutionsgroup.com/about' },
+};
 
 const principles = [
   [Compass, 'Clarity before complexity', 'We locate the real business constraint before recommending a platform, campaign or build.'],
@@ -17,6 +21,19 @@ export default function About(){return <main>
     <Reveal><div><div className="eyebrow">Who we are</div><h2 className="h2">Strategy is useless without execution.</h2><p className="lede">That belief shapes how SSG works. We do not hand over recommendations and disappear. We connect the strategy to practical infrastructure—the website, CRM, automations, lead capture, follow-up, analytics and operating workflows that make growth repeatable.</p></div></Reveal>
     <Reveal delay={100}><div className="card definition-card"><span className="pill">THE SSG DIFFERENCE</span><h3>Business thinking. Technical execution. One accountable partner.</h3><p>Instead of coordinating a strategist, designer, developer, automation specialist and CRM consultant, clients work with one team that understands how every part affects the outcome.</p></div></Reveal>
   </div></section>
+  <section className="section-tight" id="founder" aria-labelledby="founder-heading">
+    <div className="container split founder-section">
+      <div>
+        <div className="eyebrow">Meet the founder</div>
+        <h2 className="h2" id="founder-heading">Founded by <a className="founder-name" href="https://jadenshipley.com/">Jaden Shipley</a></h2>
+        <p className="founder-role">Founder &amp; CEO · Shipley Solutions Group Inc.</p>
+      </div>
+      <div>
+        <p className="lede">Jaden Shipley founded Shipley Solutions Group Inc. to help small businesses connect strategy with practical technology—from websites and CRM systems to automation and local lead generation.</p>
+        <p className="muted">A self-taught entrepreneur with hands-on experience in web design, coding and running his own businesses, Jaden focuses on building systems that make it easier to reach customers, follow up and grow.</p>
+      </div>
+    </div>
+  </section>
   <section className="section"><div className="container"><Reveal><div className="section-head"><div><div className="eyebrow">Our approach</div><h2 className="h2">Built around the outcome, not the tool.</h2></div><p className="lede section-copy">Every engagement starts with the business reality: where growth is stuck, what success looks like and which change creates the most leverage.</p></div></Reveal><div className="grid-2">{principles.map(([Icon, title, desc]: any, index)=><Reveal key={title} delay={index * 80}><div className="card approach-card"><div className="card-icon"><Icon size={21}/></div><div><h3>{title}</h3><p>{desc}</p></div></div></Reveal>)}</div></div></section>
   <section className="section outcomes-panel"><div className="container split"><Reveal><div><div className="eyebrow">What this changes</div><h2 className="h2">Systems that make the business easier to grow.</h2></div></Reveal><Reveal delay={100}><div className="outcome-list large">{['A clearer, more credible path from visitor to buyer','Qualified leads captured and routed without delay','Follow-up that happens consistently instead of manually','Teams spending less time moving information between tools','Decision-makers seeing where growth is working—and where it is not'].map(x=><span key={x}><CheckCircle2 size={20}/>{x}</span>)}</div></Reveal></div></section>
   <section className="section"><div className="container cta"><div><h2>Find the highest-leverage opportunity.</h2><p className="lede cta-copy">Start with a structured diagnostic of your current growth system.</p></div><Link href="/audit" className="btn btn-primary">Get the Free Audit <ArrowRight size={18}/></Link></div></section>

@@ -13,6 +13,35 @@ export const metadata: Metadata = {
   other: { 'ssg-release': 'V4' },
 };
 
+const organizationSchema = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      '@id': 'https://shipleysolutionsgroup.com/#organization',
+      name: 'Shipley Solutions Group Inc.',
+      alternateName: ['Shipley Solutions Group', 'SSG'],
+      url: 'https://shipleysolutionsgroup.com/',
+      logo: 'https://shipleysolutionsgroup.com/ssg-logo.png',
+      founder: { '@id': 'https://jadenshipley.com/#jaden' },
+    },
+    {
+      '@type': 'Person',
+      '@id': 'https://jadenshipley.com/#jaden',
+      name: 'Jaden Shipley',
+      url: 'https://jadenshipley.com/',
+      jobTitle: 'Founder & CEO',
+      worksFor: { '@id': 'https://shipleysolutionsgroup.com/#organization' },
+    },
+  ],
+};
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body><Nav />{children}<Footer /></body></html>;
+  return <html lang="en"><body>
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema).replace(/</g, '\\u003c') }}
+    />
+    <Nav />{children}<Footer />
+  </body></html>;
 }
