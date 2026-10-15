@@ -1,6 +1,22 @@
-# Shipley Solutions Group Inc. Website — V4
+# Shipley Solutions Group Inc. Website
 
 Production-oriented Next.js website for SSG.
+
+## Website-first release — October 15, 2026
+
+The primary offer is a website project. Navigation: Websites (`/services`), Our Work (`/work`), About (`/about`), Free Website Review (`/audit`), and Discuss Your Website (`/contact`). CRM, automation and local visibility are supporting services. Existing URLs and founder entity IDs remain stable.
+
+The homepage leads with the website offer, practical outcomes, clearly disclosed founder-owned work, the four-stage project process, and a manual review option. No prices, sales results or customer testimonials have been invented. The selected projects are Shipley’s Detailing and Jaden Shipley’s own site.
+
+### Manual website reviews
+
+- `/audit` now presents a **Free Website Review**, personally completed by Jaden with email follow-up. There is no promised turnaround or instant report.
+- `AuditForm` uses the shared `LeadForm` with `form_variant: website_review` and `source: manual-website-review`.
+- Requests go to `/api/lead`, which creates or updates a HubSpot contact and records the site URL, requested improvements, consent and manual follow-up instructions in the Message property.
+- A confirmed CRM write is required before the form reports success. The form preserves entered data on failure. The existing optional webhook remains in use when configured.
+- `/api/audit` POST returns HTTP 410 with an instruction to refresh and request the personal review. It no longer imports the agent, creates audit cases or invokes AI.
+- Historical case and staff-review code is retained for existing records. It is not part of the new intake. A future automated audit requires a separate explicit implementation decision.
+- `HUBSPOT_ACCESS_TOKEN` is required for both live intake forms. OpenAI and SSGAI variables are not required for either form.
 
 ## Production design baseline — October 6, 2026
 
@@ -40,11 +56,7 @@ In Netlify:
 6. Submit a test Project Inquiry.
 7. Confirm the contact appears in HubSpot.
 
-## Free Audit / SSG Brain boundary
-
-Free Audit is linked to `/audit`, which renders `components/AuditForm.tsx` and submits only to `/api/audit`. The governed SSGAI flow opens a durable case, creates a draft preview, stops at `QA_PENDING`, and requires an authenticated SSG human review before `PREVIEW_RELEASED`. Only a released audit is projected to HubSpot or the optional automation webhook.
-
-## V4 release
+## Historical V4 release
 
 - Mobile-safe SSG Growth System presentation.
 - Functional accessible mobile navigation.
@@ -77,9 +89,9 @@ Then open `http://localhost:3000`.
 For local HubSpot form testing, copy `.env.example` to `.env.local` and insert your token there. Never commit `.env.local`.
 
 
-## SSGAI deployment variables
+## Historical SSGAI variables
 
-Required server-only Netlify variables:
+Retained backend code may reference these variables. They are not required by the current manual review or project inquiry forms:
 
 - `OPENAI_API_KEY`
 - `SSGAI_REVIEW_TOKEN`

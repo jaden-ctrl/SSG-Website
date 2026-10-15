@@ -26,7 +26,15 @@ function buildHubSpotMessage(body: LeadPayload) {
     `Submitted: ${new Date().toISOString()}`,
   ];
 
-  if (variant === 'audit') {
+  if (variant === 'website_review') {
+    lines.push(
+      'Request type: Free Website Review — manual follow-up required',
+      `Website to review: ${text(body.website)}`,
+      `What they want to improve: ${text(body.message)}`,
+      'Next action: Jaden personally reviews the website and follows up by email.',
+      `Contact permission for this request: ${text(body.consent) === 'true' ? 'Granted' : 'Not provided'}`,
+    );
+  } else if (variant === 'audit') {
     lines.push(
       `Primary growth concern: ${text(body.growth_concern) || 'Not provided'}`,
       `Approx. monthly lead volume: ${text(body.monthly_leads) || 'Not provided'}`,
@@ -77,11 +85,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Invalid request body' }, { status: 400 });
   }
 
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return NextResponse.json({ ok: false, error: 'Invalid request body' }, { status: 400 });
+  }
+
   const email = text(body.email).toLowerCase();
   const firstName = text(body.first_name);
 
-  if (!email || !firstName) {
+  if (!email || !firstName || email.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ ok: false, error: 'Missing required fields' }, { status: 400 });
+  }
+
+  if (text(body.faxNumber)) {
+    return NextResponse.json({ ok: false, error: 'Please check the form.' }, { status: 400 });
+  }
+
+  if (text(body.form_variant) === 'website_review') {
+    if (!text(body.company) || !text(body.message) || text(body.message).length > 3000 || text(body.consent) !== 'true') {
+      return NextResponse.json({ ok: false, error: 'Please complete the review request.' }, { status: 400 });
+    }
+    try {
+      const rawWebsite = text(body.website);
+      if (!rawWebsite || rawWebsite.length > 500) throw new Error('Invalid website');
+      const website = new URL(/^https?:\/\//i.test(rawWebsite) ? rawWebsite : `https://${rawWebsite}`);
+      if (!['http:', 'https:'].includes(website.protocol) || !website.hostname.includes('.') || website.username || website.password) throw new Error('Invalid website');
+      body.website = website.href;
+    } catch {
+      return NextResponse.json({ ok: false, error: 'Please enter a valid website address.' }, { status: 400 });
+    }
   }
 
   const token = process.env.HUBSPOT_ACCESS_TOKEN;

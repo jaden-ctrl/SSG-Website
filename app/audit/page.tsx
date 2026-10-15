@@ -1,53 +1,21 @@
-import { CheckCircle2, Search, Workflow, Gauge, Target } from 'lucide-react';
+import Link from 'next/link';
+import { Check, Mail, Search, UserRound } from 'lucide-react';
 import AuditForm from '@/components/AuditForm';
 
-export const metadata = { title: 'Free Business Audit' };
+export const metadata = {
+  title: 'Free Website Review',
+  description: 'Get a personal website review from Jaden Shipley. Receive practical suggestions about your message, mobile experience and customer inquiry path by email.',
+  alternates: { canonical: '/audit' },
+};
 
 export default function Audit() {
-  return (
-    <main>
-      <section className="page-hero audit-page">
-        <div className="container audit-wrap">
-          <div>
-            <div className="eyebrow">Free Business Audit</div>
-            <h1 className="h2" style={{ fontSize: 'clamp(2.8rem,6vw,5rem)' }}>
-              Find where your growth system is leaking.
-            </h1>
-            <p className="lead">
-              This is a diagnostic review, not a sales call disguised as a form. We use your answers to evaluate how prospects find you, convert, enter your pipeline and get followed up with — then identify the highest-leverage fixes.
-            </p>
-
-            <div className="audit-points">
-              {[
-                'Website & conversion path',
-                'Lead capture & follow-up',
-                'CRM and pipeline structure',
-                'Automation opportunities',
-                'Local visibility & demand',
-                'Priority action plan',
-              ].map((x) => (
-                <div key={x}>
-                  <CheckCircle2 size={19} color="#5186ff" /> {x}
-                </div>
-              ))}
-            </div>
-
-            <div className="audit-mini-grid">
-              <div><Search size={18} /><strong>Diagnose</strong><span>Find friction and leaks.</span></div>
-              <div><Gauge size={18} /><strong>Prioritize</strong><span>Rank opportunities by leverage.</span></div>
-              <div><Workflow size={18} /><strong>Architect</strong><span>Map how the system should flow.</span></div>
-              <div><Target size={18} /><strong>Act</strong><span>Leave with clear next moves.</span></div>
-            </div>
-          </div>
-
-          <div className="card audit-card">
-            <span className="eyebrow">Diagnostic intake</span>
-            <h2 style={{ marginTop: 18 }}>Request your audit</h2>
-            <p className="muted">Give us enough context to make the review useful. No giant questionnaire.</p>
-            <AuditForm />
-          </div>
-        </div>
-      </section>
-    </main>
-  );
+  return <main id="main-content"><section className="page-hero audit-page"><div className="container contact-grid">
+    <div className="contact-intro"><div className="eyebrow">Free Website Review</div><h1 className="h2 contact-title">A fresh perspective.<br/><span className="blue">Practical next steps.</span></h1><p className="lede">Send us your website and tell us what isn’t working for you. Jaden will personally review it and email you observations and suggested improvements.</p>
+      <ul className="check-list review-points">{['Message: can visitors quickly understand what you do?','Mobile experience: is the site easy to read and navigate?','Trust: are your services and business details clear?','Inquiries: can a visitor easily take the next step?'].map(point=><li key={point}><Check size={18}/>{point}</li>)}</ul>
+      <div className="conversation-steps"><div><Search size={20}/><span><strong>01 — Share your website</strong><small>Tell us about the part you want to improve.</small></span></div><div><UserRound size={20}/><span><strong>02 — Jaden reviews it</strong><small>A personal review of the pages and customer journey.</small></span></div><div><Mail size={20}/><span><strong>03 — Get feedback by email</strong><small>Practical suggestions to help you decide what to do next.</small></span></div></div>
+      <p className="muted review-boundary">This is an initial website review. Detailed technical testing, implementation and ongoing work are scoped separately.</p>
+      <p className="muted">Don’t have a website yet? <Link className="text-link" href="/contact">Tell us about your project.</Link></p>
+    </div>
+    <div className="contact-form-shell"><div className="contact-form-head"><span className="pill">PERSONALLY REVIEWED BY JADEN</span><h2>Request your free review.</h2><p className="muted">Share a few details so the feedback is relevant to your business.</p></div><AuditForm /></div>
+  </div></section></main>;
 }
