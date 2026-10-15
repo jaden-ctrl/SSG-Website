@@ -2,136 +2,60 @@
 
 import { FormEvent, useState } from 'react';
 
-type LeadFormProps = {
-  source?: string;
-};
+type LeadFormProps = { source?: string; variant?: 'project' | 'website_review' };
 
-export default function LeadForm({ source = 'website-contact' }: LeadFormProps) {
+export default function LeadForm({ source = 'website-project', variant = 'project' }: LeadFormProps) {
+  const review = variant === 'website_review';
   const [status, setStatus] = useState('');
   const [sending, setSending] = useState(false);
+  const [succeeded, setSucceeded] = useState(false);
+  const [failed, setFailed] = useState(false);
 
-  async function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (sending) return;
-
-    setSending(true);
-    setStatus('Sending…');
-
-    const form = e.currentTarget;
+    const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form).entries());
     const params = new URLSearchParams(window.location.search);
-
-    const payload = {
-      ...data,
-      source,
-      form_variant: 'contact',
-      utm_source: params.get('utm_source') || '',
-      utm_medium: params.get('utm_medium') || '',
-      utm_campaign: params.get('utm_campaign') || '',
-      landing_page: window.location.href,
-    };
-
+    setSending(true); setFailed(false); setStatus('Sending your request…');
     try {
-      const res = await fetch('/api/lead', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+      const rawWebsite = String(data.website || '').trim();
+      let website = '';
+      if (rawWebsite) {
+        const url = new URL(/^https?:\/\//i.test(rawWebsite) ? rawWebsite : `https://${rawWebsite}`);
+        if (!['http:', 'https:'].includes(url.protocol) || !url.hostname.includes('.') || url.username || url.password) throw new Error('website');
+        website = url.href;
+      }
+      const response = await fetch('/api/lead', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...data, website, source, form_variant: review ? 'website_review' : 'contact',
+          utm_source: params.get('utm_source') || '', utm_medium: params.get('utm_medium') || '',
+          utm_campaign: params.get('utm_campaign') || '', landing_page: window.location.href }),
       });
-
-      if (!res.ok) throw new Error('Request failed');
-
-      form.reset();
-      setStatus('Thanks — your project inquiry has been received.');
-    } catch {
-      setStatus('Something went wrong. Please try again.');
-    } finally {
-      setSending(false);
-    }
+      const result = await response.json();
+      if (!response.ok || result.ok !== true) throw new Error('submission');
+      form.reset(); setSucceeded(true);
+      setStatus(review ? 'Your website review request has been received. Jaden will review your site and follow up by email.' : 'Your project inquiry has been received. Jaden will follow up by email to discuss the scope and next steps.');
+    } catch (cause) {
+      setFailed(true);
+      setStatus(cause instanceof Error && cause.message === 'website' ? 'Please enter a valid website address, such as yourbusiness.com.' : 'Your request could not be confirmed. Your answers are still here—please try again.');
+    } finally { setSending(false); }
   }
 
-  return (
-    <form className="form" onSubmit={submit}>
-      <div className="form-row">
-        <label>
-          First name
-          <input name="first_name" required autoComplete="given-name" />
-        </label>
-        <label>
-          Last name
-          <input name="last_name" required autoComplete="family-name" />
-        </label>
-      </div>
-
-      <div className="form-row">
-        <label>
-          Email
-          <input name="email" required type="email" autoComplete="email" />
-        </label>
-        <label>
-          Phone
-          <input name="phone" type="tel" autoComplete="tel" />
-        </label>
-      </div>
-
-      <label>
-        Company
-        <input name="company" required />
-      </label>
-
-      <label>
-        Website
-        <input name="website" placeholder="https://" />
-      </label>
-
-      <div className="form-row">
-        <label>
-          What can we help you build?
-          <select name="project_type" defaultValue="" required>
-            <option value="" disabled>Select one</option>
-            <option>Website / digital presence</option>
-            <option>CRM & sales system</option>
-            <option>Workflow automation</option>
-            <option>AI implementation</option>
-            <option>Lead generation system</option>
-            <option>Growth strategy / advisory</option>
-            <option>Multiple systems / full engagement</option>
-          </select>
-        </label>
-        <label>
-          Target timeline
-          <select name="timeline" defaultValue="" required>
-            <option value="" disabled>Select one</option>
-            <option>ASAP</option>
-            <option>Within 30 days</option>
-            <option>1–3 months</option>
-            <option>3+ months</option>
-            <option>Exploring options</option>
-          </select>
-        </label>
-      </div>
-
-      <label>
-        Estimated project investment
-        <select name="budget" defaultValue="">
-          <option value="" disabled>Select a range</option>
-          <option>Under $2,500</option>
-          <option>$2,500–$5,000</option>
-          <option>$5,000–$10,000</option>
-          <option>$10,000–$25,000</option>
-          <option>$25,000+</option>
-          <option>Not sure yet</option>
-        </select>
-      </label>
-
-      <label>
-        What outcome are you trying to create?
-        <textarea name="message" required />
-      </label>
-
-      <button className="btn btn-primary" type="submit" disabled={sending}>
-        {sending ? 'Sending…' : 'Start the Conversation'}
-      </button>
-      <div className="form-status" aria-live="polite">{status}</div>
-    </form>
-  );
+  return <div>
+    {succeeded ? <div className="submission-success"><span className="pill">REQUEST RECEIVED</span><h3>Thanks for reaching out.</h3><p>{review ? 'Your website review will be completed personally by Jaden. Look out for an email with practical observations and suggested next steps.' : 'We’ll use your project details to start a focused conversation about your website.'}</p></div> :
+    <form className="form" onSubmit={submit} aria-busy={sending}>
+      <div className="form-row"><label>First name<input name="first_name" required maxLength={80} autoComplete="given-name" /></label><label>Last name <span className="field-optional">Optional</span><input name="last_name" maxLength={80} autoComplete="family-name" /></label></div>
+      <label>Email<input name="email" required type="email" maxLength={200} autoComplete="email" /></label>
+      <label>Business name<input name="company" required maxLength={160} autoComplete="organization" /></label>
+      <label>{review ? 'Website to review' : 'Current website'}{!review && <span className="field-optional">Optional</span>}<input name="website" required={review} type="text" inputMode="url" placeholder="yourbusiness.com" maxLength={500} autoComplete="url" /></label>
+      {!review && <div className="form-row"><label>What do you need?<select name="project_type" defaultValue="" required><option value="" disabled>Select a project</option><option>A new website</option><option>A website redesign</option><option>Website + CRM or automation</option><option>CRM, automation or local visibility</option><option>Help deciding where to start</option></select></label><label>Ideal timing <span className="field-optional">Optional</span><select name="timeline" defaultValue=""><option value="">Not sure yet</option><option>As soon as practical</option><option>Within 1–3 months</option><option>More than 3 months away</option></select></label></div>}
+      <label>{review ? 'What would you like to improve?' : 'Tell us about your project'}<textarea name="message" required maxLength={3000} placeholder={review ? 'For example: the site looks dated, visitors struggle to find services, or the contact process is confusing.' : 'What does your business do, and what should your new website help customers do?'} /></label>
+      <label className="consent-label"><input name="consent" type="checkbox" value="true" required /><span>You may contact me about this request.</span></label>
+      <input name="faxNumber" tabIndex={-1} autoComplete="off" aria-hidden="true" className="honeypot" />
+      <button className="btn btn-primary" type="submit" disabled={sending}>{sending ? 'Sending…' : review ? 'Request My Free Website Review' : 'Send My Website Inquiry'}</button>
+      <p className="form-note">{review ? 'Jaden reviews requests personally and follows up by email. No cost or obligation to start a project.' : 'This starts a conversation. Scope, pricing and timing are agreed before work begins.'}</p>
+    </form>}
+    <div className={`form-status${failed ? ' is-error' : ''}`} role={failed ? 'alert' : 'status'} aria-live="polite" aria-atomic="true">{status}</div>
+  </div>;
 }

@@ -1,13 +1,30 @@
-import { Bot, ChartNoAxesCombined, Code2, DatabaseZap, Search, Workflow } from 'lucide-react';
 import Link from 'next/link';
+import { ArrowRight, Check, DatabaseZap, Search, Workflow } from 'lucide-react';
+import WebsiteProcess from '@/components/WebsiteProcess';
 
-const items = [
-  [Code2,'Websites & Digital Presence','Strategy, UX, conversion architecture, responsive development, analytics and SEO foundations.','Your website should create confidence quickly and move the right visitor toward action.'],
-  [DatabaseZap,'CRM & Revenue Operations','Pipeline design, intake, segmentation, lead routing, follow-up logic and reporting.','Turn inquiries into a managed revenue process instead of a messy inbox.'],
-  [Workflow,'Workflow Automation','Integrations, notifications, handoffs, data movement and repetitive process automation.','Reduce manual touches while increasing consistency and speed.'],
-  [Bot,'AI Implementation','Research agents, business assistants, intake analysis, content workflows and internal copilots.','Use AI where it can create leverage — not because it is trendy.'],
-  [Search,'Local Lead Generation','Local search foundations, offer structure, landing pages, attribution and campaign support.','Create more qualified demand and know where it came from.'],
-  [ChartNoAxesCombined,'Business Growth Advisory','Offer review, funnel diagnosis, process mapping, KPI selection and execution planning.','Find the constraint and focus resources where they can actually move the business.']
-];
-export const metadata = { title: 'Services' };
-export default function Services(){return <main><section className="page-hero"><div className="container"><div className="eyebrow">Services</div><h1 className="display" style={{fontSize:'clamp(2.8rem,7vw,5.2rem)'}}>Technology and growth systems<br/><span className="blue">built around outcomes.</span></h1><p className="lede">SSG combines strategy, implementation and automation so businesses can stop duct-taping tools together and start operating as a system.</p></div></section><section className="section-tight"><div className="container grid-2">{items.map(([Icon,title,scope,outcome]:any)=><article className="card" key={title}><div className="card-icon"><Icon size={22}/></div><h3>{title}</h3><p>{scope}</p><p style={{marginTop:16,color:'#e3e7ed'}}><b>Business outcome:</b> {outcome}</p></article>)}</div></section><section className="section"><div className="container cta"><div><h2>Not sure which service you need?</h2><p className="lede" style={{margin:0}}>Good. Start with the problem, not the product.</p></div><Link href="/audit" className="btn btn-primary">Request a Free Audit</Link></div></section></main>}
+export const metadata = {
+  title: 'Website Design & Supporting Services',
+  description: 'New websites and redesigns for small businesses, with optional CRM, automation and local visibility support. Get a project scope tailored to your business.',
+  alternates: { canonical: '/services' },
+};
+
+export default function Services() {
+  return <main id="main-content">
+    <section className="page-hero"><div className="container"><div className="eyebrow">Website design &amp; development</div><h1 className="display about-display">A website built<br/><span className="blue">around your business.</span></h1><p className="lede">Starting from scratch or outgrowing your current site? We’ll help you define the message, design the experience and build a practical path from visitor to inquiry.</p><div className="hero-actions"><Link href="/contact" className="btn btn-primary">Discuss Your Website <ArrowRight size={18}/></Link><Link href="/work" className="btn btn-secondary">Explore Our Work</Link></div></div></section>
+    <section className="section-tight"><div className="container split website-scope"><div><div className="eyebrow">The core project</div><h2 className="h2">Clear content.<br/>Thoughtful design.<br/>A useful next step.</h2><p className="lede">We define the pages, content responsibilities, functionality, timeline and price in your proposal. You’ll know what is included before the project begins.</p><p className="muted">Hosting, ongoing care and any paid tools are discussed as part of the scope.</p></div><div className="card scope-card"><h3>What we plan together</h3><ul className="check-list">{['Page structure and a clear description of your services','Visual design that fits your business and brand','Responsive layouts for mobile, tablet and desktop','Contact forms and clear calls to action','Page titles, descriptions and search foundations','Launch checks, handoff and support requirements'].map(item=><li key={item}><Check size={18}/>{item}</li>)}</ul></div></div></section>
+    <section className="section"><div className="container"><div className="section-head"><div><div className="eyebrow">The project process</div><h2 className="h2">Know what happens next.</h2></div></div><WebsiteProcess /></div></section>
+    <section className="section work-section" id="supporting-services"><div className="container"><div className="section-head"><div><div className="eyebrow">Supporting services</div><h2 className="h2">Connect the next<br/>part of the journey.</h2></div><p className="lede section-copy">Add these when they solve a specific need. Each is scoped separately, so your website project stays focused.</p></div><div className="grid-3">{[
+      { Icon: DatabaseZap, title: 'CRM & lead follow-up', copy: 'Organize inquiries, define pipeline stages and create a consistent process for following up with potential customers.' },
+      { Icon: Workflow, title: 'Workflow automation', copy: 'Connect forms and business tools, route information and reduce repetitive administrative work.' },
+      { Icon: Search, title: 'Local visibility & lead generation', copy: 'Review local search foundations, service messaging and landing pages, then scope the work around your audience.' },
+    ].map(({Icon,title,copy})=><article className="card" key={title}><div className="card-icon"><Icon size={22}/></div><h3>{title}</h3><p>{copy}</p></article>)}</div></div></section>
+    <section className="section"><div className="container faq-layout"><div><div className="eyebrow">Before we start</div><h2 className="h2">A few practical answers.</h2></div><div className="faq-list">
+      <details><summary>How much does a website cost?</summary><p>Pricing depends on the number of pages, content, features and integrations. Share your requirements and we’ll define a scope and quote before work starts.</p></details>
+      <details><summary>Can you redesign an existing website?</summary><p>Yes. We’ll review what you have, what needs to change and whether to improve the existing site or rebuild it. Existing pages and search visibility are part of that discussion.</p></details>
+      <details><summary>How long will the project take?</summary><p>We agree on a timeline after defining the scope. Content readiness, feedback and integrations all affect the schedule.</p></details>
+      <details><summary>Do I need a CRM or automation package?</summary><p>You can start with a website project. Supporting services are added only when they fit the agreed scope and your business needs.</p></details>
+      <details><summary>Can you review my current website first?</summary><p>Yes. <Link href="/audit">Request a Free Website Review</Link>. Jaden personally reviews the site and follows up by email with practical suggestions.</p></details>
+    </div></div></section>
+    <section className="section-tight"><div className="container cta"><div><h2>Have a website project in mind?</h2><p className="lede cta-copy">Tell us about your business and the change you want to make.</p></div><Link className="btn btn-primary" href="/contact">Discuss Your Website <ArrowRight size={18}/></Link></div></section>
+  </main>;
+}

@@ -1,14 +1,15 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import './website.css';
 import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
 
 export const metadata: Metadata = {
-  title: { default: 'Shipley Solutions Group | Build. Automate. Scale.', template: '%s | Shipley Solutions Group' },
-  description: 'Shipley Solutions Group helps businesses grow with websites, automation, CRM systems, AI implementation, lead generation and business strategy.',
+  title: { default: 'Shipley Solutions Group | Websites for Small Businesses', template: '%s | Shipley Solutions Group' },
+  description: 'Custom websites for small businesses, with practical CRM, automation and local visibility support. Work directly with founder Jaden Shipley.',
   metadataBase: new URL('https://shipleysolutionsgroup.com'),
-  openGraph: { title: 'Shipley Solutions Group', description: 'Technology, automation and growth systems for ambitious businesses.', type: 'website' },
-  other: { 'ssg-release': 'V4' },
+  openGraph: { title: 'Shipley Solutions Group | Websites for Small Businesses', description: 'Clear messaging, thoughtful web design and a simple path to customer inquiries.', type: 'website' },
+  other: { 'ssg-release': 'website-first-manual-review-2026-10' },
 };
 
 const organizationSchema = {
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       type="application/ld+json"
       dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema).replace(/</g, '\\u003c') }}
     />
+    <a className="skip-link" href="#main-content">Skip to content</a>
     <Nav />{children}<Footer />
   </body></html>;
 }
