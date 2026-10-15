@@ -4,8 +4,8 @@ import ProjectExamples from '@/components/ProjectExamples';
 import WebsiteProcess from '@/components/WebsiteProcess';
 
 export const metadata = {
-  title: 'Websites for Small Businesses',
-  description: 'Custom websites for small and service businesses. Work directly with Jaden Shipley on a clear message, thoughtful design and a simple path to customer inquiries.',
+  title: 'Custom Business Websites',
+  description: 'Custom websites for businesses and organizations. Work directly with Jaden Shipley on a clear message, thoughtful design and a simple path to customer inquiries.',
   alternates: { canonical: '/' },
 };
 
@@ -13,9 +13,9 @@ export default function Home() {
   return <main id="main-content">
     <section className="hero website-hero"><div className="container hero-grid">
       <div className="hero-copy">
-        <div className="eyebrow">Web design for small businesses</div>
+        <div className="eyebrow">Strategic web design &amp; development</div>
         <h1 className="display website-display">Your business deserves<br/><span className="blue">a better website.</span></h1>
-        <p className="lede">Show people what you do, give them a reason to trust you, and make it easy to get in touch. SSG builds custom websites around that next step.</p>
+        <p className="lede">Present your organization with confidence, communicate what makes it valuable, and guide visitors toward the right next step. SSG builds custom websites around your business goals.</p>
         <div className="hero-actions"><Link className="btn btn-primary" href="/contact">Discuss Your Website <ArrowRight size={18}/></Link><Link className="btn btn-secondary" href="/work">Explore Our Work</Link></div>
         <p className="hero-note">New websites &amp; redesigns · Direct collaboration with the founder</p>
       </div>

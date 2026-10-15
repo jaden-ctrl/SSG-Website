@@ -8,6 +8,10 @@ The primary offer is a website project. Navigation: Websites (`/services`), Our 
 
 The homepage leads with the website offer, practical outcomes, clearly disclosed founder-owned work, the four-stage project process, and a manual review option. No prices, sales results or customer testimonials have been invented. The selected projects are Shipley’s Detailing and Jaden Shipley’s own site.
 
+### Audience and positioning
+
+The brand is not limited to small businesses. Public copy addresses businesses and organizations, including company teams planning larger website projects. Scope is defined around goals, content, features, stakeholders and approvals. Do not claim established enterprise clients, certifications or capabilities that have not been verified. Keep website projects as the core offer and the free review manual.
+
 ### Manual website reviews
 
 - `/audit` now presents a **Free Website Review**, personally completed by Jaden with email follow-up. There is no promised turnaround or instant report.
