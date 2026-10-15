@@ -5,10 +5,10 @@ import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
 
 export const metadata: Metadata = {
-  title: { default: 'Shipley Solutions Group | Websites for Small Businesses', template: '%s | Shipley Solutions Group' },
-  description: 'Custom websites for small businesses, with practical CRM, automation and local visibility support. Work directly with founder Jaden Shipley.',
+  title: { default: 'Shipley Solutions Group | Custom Business Websites', template: '%s | Shipley Solutions Group' },
+  description: 'Custom websites for businesses and organizations, with practical CRM, automation and local visibility support. Work directly with founder Jaden Shipley.',
   metadataBase: new URL('https://shipleysolutionsgroup.com'),
-  openGraph: { title: 'Shipley Solutions Group | Websites for Small Businesses', description: 'Clear messaging, thoughtful web design and a simple path to customer inquiries.', type: 'website' },
+  openGraph: { title: 'Shipley Solutions Group | Custom Business Websites', description: 'Clear messaging, thoughtful web design and a simple path to customer inquiries.', type: 'website' },
   other: { 'ssg-release': 'website-first-manual-review-2026-10' },
 };
 
