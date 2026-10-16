@@ -46,3 +46,12 @@
 }
 @media (max-width:640px) { .showcase-stage-fluid { height:370px; min-height:370px; } .preview-layer { transform:translateY(4px); } .preview-layer.is-active { transform:none; } }
 @media (prefers-reduced-motion:reduce) { .preview-layer { transform:none; transition:none; } }
+
+/* Process cards replace the numbered timeline. */
+.website-process.process-cards { gap:18px; }
+.website-process.process-cards > li { border:1px solid #334361; border-radius:18px; padding:28px 24px; background:linear-gradient(145deg,#18243a,#111b2d); }
+.website-process.process-cards > li::before { content:none; }
+.process-card-icon { display:grid; place-items:center; width:48px; height:48px; border-radius:13px; background:#24437555; color:#a8c1ff; border:1px solid #729bff30; margin-bottom:26px; }
+.website-process.process-cards h3 { margin:0 0 12px; font-size:1.28rem; }
+.website-process.process-cards p { font-size:.91rem; line-height:1.7; }
+@media (max-width:640px) { .website-process.process-cards { grid-template-columns:1fr; gap:14px; } .website-process.process-cards > li { padding:24px; } .process-card-icon { margin-bottom:18px; } }
