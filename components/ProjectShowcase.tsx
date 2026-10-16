@@ -9,8 +9,12 @@ export default function ProjectShowcase() {
   const [mobile, setMobile] = useState(false);
   return <div className="showcase-composition"><div className="showcase-orbit" aria-hidden="true"/><div className="showcase-kicker"><span/> From first impression to next step</div><div className="project-showcase">
     <div className="showcase-controls"><div className="showcase-projects" role="group" aria-label="Choose a project"><button type="button" aria-pressed={project === 'detailing'} onClick={()=>setProject('detailing')}>Detailing</button><button type="button" aria-pressed={project === 'personal'} onClick={()=>setProject('personal')}>Personal brand</button></div><div className="showcase-devices" role="group" aria-label="Preview layout"><button type="button" aria-label="Desktop layout" aria-pressed={!mobile} onClick={()=>setMobile(false)}><Monitor size={17}/></button><button type="button" aria-label="Mobile layout" aria-pressed={mobile} onClick={()=>setMobile(true)}><Smartphone size={17}/></button></div></div>
-    <div className={`showcase-stage ${mobile ? 'is-mobile' : ''}`}><ProjectPreview key={project} project={project} mobile={mobile} eager /></div>
+    <div className="showcase-stage showcase-stage-fluid">{(['detailing', 'personal'] as const).flatMap(item => [false, true].map(phone => {
+      const active = project === item && mobile === phone;
+      return <div key={`${item}-${phone}`} className={`preview-layer ${phone ? 'preview-phone' : 'preview-desktop'} ${active ? 'is-active' : ''}`} aria-hidden={!active}><ProjectPreview project={item} mobile={phone} eager /></div>;
+    }))}</div>
     <div className="showcase-caption"><span>Design excerpt · Founder-owned project</span><a href={project === 'detailing' ? 'https://shipleysdetailing.com/' : 'https://jadenshipley.com/'} target="_blank" rel="noopener noreferrer">View full site <ArrowUpRight size={14}/><span className="sr-only"> (opens in a new tab)</span></a></div>
   </div><div className="showcase-note"><span className="showcase-note-icon" aria-hidden="true">↗</span><div><strong>Built around your business.</strong><span>Explore a project. Switch the screen size.</span></div></div></div>;
 }
+
 

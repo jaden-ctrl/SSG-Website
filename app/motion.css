@@ -13,7 +13,7 @@
 .showcase-note strong,.showcase-note div > span { display:block; }
 .showcase-note strong { font-size:.78rem; font-weight:650; }
 .showcase-note div > span { font-size:.69rem; color:#a6b5ce; margin-top:2px; }
-.showcase-stage .design-excerpt { transition:width .5s cubic-bezier(.22,1,.36,1),border-radius .5s; }
+
 .showcase-controls button { transition:background .2s,border-color .2s,color .2s; }
 .visual-project,.service-card { transition:transform .25s,border-color .25s,box-shadow .25s; }
 .card-icon { transition:transform .25s,background .25s; }
@@ -23,16 +23,26 @@
 .quote-panel { position:relative; overflow:hidden; }
 .quote-panel::after { content:''; position:absolute; top:-100px; right:-100px; width:270px; height:270px; border:1px solid #97b5ff1c; border-radius:50%; pointer-events:none; }
 @media (hover:hover) { .visual-project:hover,.service-card:hover { transform:translateY(-5px); border-color:#6389c8; box-shadow:0 20px 45px #0003; } .service-card:hover .card-icon { transform:translateY(-3px) rotate(-5deg); background:#244576; } .text-link:hover svg,.btn:hover svg { transform:translateX(3px); } }
-@media (prefers-reduced-motion:no-preference) {
- .hero-copy { animation:rise-in .75s both; }
- .showcase-composition { animation:rise-in .9s .12s both; }
- .showcase-stage .design-excerpt { animation:preview-in .45s both; }
- .motion-enter { animation:rise-in .7s both; }
- .website-process li:nth-child(2).motion-enter,.service-card:nth-child(2).motion-enter { animation-delay:.08s; }
- .website-process li:nth-child(3).motion-enter,.service-card:nth-child(3).motion-enter { animation-delay:.16s; }
- .website-process li:nth-child(4).motion-enter { animation-delay:.24s; }
- @keyframes rise-in { from { opacity:.15; transform:translateY(22px); } to { opacity:1; transform:translateY(0); } }
- @keyframes preview-in { from { opacity:.4; transform:translateY(7px) scale(.985); } to { opacity:1; transform:none; } }
-}
 @media (max-width:640px) { .showcase-orbit { inset:-10px 0; } .showcase-kicker { font-size:.64rem; } .showcase-note { margin-left:4px; } }
 @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } *,*::before,*::after { animation:none!important; transition:none!important; } }
+
+/* Stable, pre-rendered layers crossfade without resizing or reflowing text. */
+:root { --motion-ease:cubic-bezier(.22,1,.36,1); }
+.hero-copy,.showcase-composition { animation:none; }
+.showcase-stage-fluid { position:relative; height:370px; min-height:370px; isolation:isolate; }
+.preview-layer { position:absolute; inset:0; display:flex; justify-content:center; align-items:center; opacity:0; transform:translateY(6px) scale(.99); pointer-events:none; transition:opacity 420ms ease,transform 600ms var(--motion-ease); }
+.preview-layer.is-active { opacity:1; transform:none; z-index:1; }
+.showcase-stage-fluid .preview-desktop .design-excerpt { width:100%; }
+.showcase-stage-fluid .preview-phone .design-excerpt { width:225px; max-width:100%; }
+.showcase-stage-fluid .design-excerpt { animation:none; transition:none; }
+.visual-project,.service-card { transition:transform 450ms var(--motion-ease),border-color 300ms ease,box-shadow 450ms ease; }
+.btn { transition:transform 350ms var(--motion-ease),background-color 250ms ease,border-color 250ms ease,box-shadow 350ms ease; }
+.card-icon,.text-link svg,.btn svg { transition:transform 350ms var(--motion-ease),background-color 250ms ease; }
+@media (hover:hover) and (pointer:fine) { .visual-project:hover,.service-card:hover { transform:translateY(-3px); } .service-card:hover .card-icon { transform:translateY(-2px); } }
+@media (hover:none), (pointer:coarse) { .btn:hover,.visual-project:hover,.service-card:hover,.service-card:hover .card-icon { transform:none; } }
+@media (prefers-reduced-motion:no-preference) and (min-width:901px) {
+ .showcase-orbit { animation:orbit-drift 16s ease-in-out infinite alternate; }
+ @keyframes orbit-drift { from { transform:rotate(-24deg) translateY(-3px); } to { transform:rotate(-20deg) translateY(3px); } }
+}
+@media (max-width:640px) { .showcase-stage-fluid { height:370px; min-height:370px; } .preview-layer { transform:translateY(4px); } .preview-layer.is-active { transform:none; } }
+@media (prefers-reduced-motion:reduce) { .preview-layer { transform:none; transition:none; } }
