@@ -9,7 +9,7 @@ export default function Footer() {
           <Link href="/services">Websites</Link>
           <Link href="/work">Our Work</Link>
           <Link href="/audit">Free Website Review</Link>
-          <Link href="/contact">Contact</Link>
+          <Link href="/contact">Request a Website Quote</Link>
         </div>
       </div>
     </footer>
