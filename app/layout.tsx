@@ -3,6 +3,8 @@ import './globals.css';
 import './website.css';
 import Nav from '@/components/Nav';
 import Footer from '@/components/Footer';
+import Motion from '@/components/MotionEnhancements';
+import './motion.css';
 
 export const metadata: Metadata = {
   title: { default: 'Shipley Solutions Group | Custom Business Websites', template: '%s | Shipley Solutions Group' },
@@ -48,6 +50,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema).replace(/</g, '\\u003c') }}
     />
     <a className="skip-link" href="#main-content">Skip to content</a>
-    <Nav />{children}<Footer />
+    <Motion /><Nav />{children}<Footer />
   </body></html>;
 }
+
+
