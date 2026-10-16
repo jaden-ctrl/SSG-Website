@@ -7,8 +7,14 @@ import Footer from '@/components/Footer';
 export const metadata: Metadata = {
   title: { default: 'Shipley Solutions Group | Custom Business Websites', template: '%s | Shipley Solutions Group' },
   description: 'Custom websites for businesses and organizations, with practical CRM, automation and local visibility support. Work directly with founder Jaden Shipley.',
+  icons: {
+    icon: [{ url: '/ssg-favicon-v2.png', type: 'image/png', sizes: '192x192' }],
+    shortcut: '/ssg-favicon-v2.png',
+    apple: '/apple-icon.png?v=ssg-v2',
+  },
   metadataBase: new URL('https://shipleysolutionsgroup.com'),
-  openGraph: { title: 'Shipley Solutions Group | Custom Business Websites', description: 'Clear messaging, thoughtful web design and a simple path to customer inquiries.', type: 'website' },
+  openGraph: { title: 'Shipley Solutions Group | Custom Business Websites', description: 'Clear messaging, thoughtful web design and a simple path to customer inquiries.', type: 'website', images: [{ url: '/ssg-share-logo-v2.png', width: 512, height: 512, alt: 'Shipley Solutions Group logo' }] },
+  twitter: { card: 'summary', title: 'Shipley Solutions Group | Custom Business Websites', description: 'Custom websites for businesses and organizations.', images: ['/ssg-share-logo-v2.png'] },
   other: { 'ssg-release': 'website-first-manual-review-2026-10' },
 };
 
