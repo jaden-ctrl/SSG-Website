@@ -1,6 +1,6 @@
 const stages = [
-  ['Plan', 'Talk through your business, pages, features and priorities. Agree on the scope and quote before work starts.'],
-  ['Design', 'Shape the message and visual direction. Review the layout and give feedback before it moves forward.'],
+  ['Scope & quote', 'Talk through your business, pages, features and priorities. Agree on the scope and quote before work starts.'],
+  ['Design', 'Shape the message and visual direction. Review the layout and provide consolidated feedback at the agreed stages.'],
   ['Build', 'Develop the pages, adapt them for mobile, and connect the agreed inquiry forms and integrations.'],
   ['Launch', 'Review the finished site together, check the key customer journeys, and agree on handoff and any ongoing support.'],
 ];

@@ -1,59 +1,32 @@
 import Link from 'next/link';
 import { ArrowRight, Check, LayoutTemplate, MessageSquare, Smartphone, Workflow } from 'lucide-react';
 import ProjectExamples from '@/components/ProjectExamples';
+import ProjectShowcase from '@/components/ProjectShowcase';
 import WebsiteProcess from '@/components/WebsiteProcess';
 
 export const metadata = {
   title: 'Custom Business Websites',
-  description: 'Custom websites for businesses and organizations. Work directly with Jaden Shipley on a clear message, thoughtful design and a simple path to customer inquiries.',
+  description: 'Custom website design and development for businesses and organizations. Explore project examples and request a defined scope, pricing and proposed timeline from Jaden Shipley.',
   alternates: { canonical: '/' },
 };
 
 export default function Home() {
   return <main id="main-content">
-    <section className="hero website-hero"><div className="container hero-grid">
-      <div className="hero-copy">
-        <div className="eyebrow">Strategic web design &amp; development</div>
-        <h1 className="display website-display">Your business deserves<br/><span className="blue">a better website.</span></h1>
-        <p className="lede">Present your organization with confidence, communicate what makes it valuable, and guide visitors toward the right next step. SSG builds custom websites around your business goals.</p>
-        <div className="hero-actions"><Link className="btn btn-primary" href="/contact">Discuss Your Website <ArrowRight size={18}/></Link><Link className="btn btn-secondary" href="/work">Explore Our Work</Link></div>
-        <p className="hero-note">New websites &amp; redesigns · Direct collaboration with the founder</p>
-      </div>
-      <div className="website-illustration" aria-label="Illustration of a clear service business website">
-        <div className="browser-bar"><span className="browser-dots" aria-hidden="true"><i/><i/><i/></span><span>Your next website</span><LayoutTemplate size={16}/></div>
-        <div className="browser-content">
-          <div className="sample-nav"><strong>YOUR BUSINESS</strong><span>Services &nbsp; About &nbsp; Contact</span></div>
-          <div className="sample-eyebrow">A clear first impression</div>
-          <div className="sample-headline">Make what you do<br/><em>impossible to miss.</em></div>
-          <p>A focused message. Work worth showing.<br/>One obvious next step.</p>
-          <span className="sample-button" aria-hidden="true">Let’s talk <ArrowRight size={15}/></span>
-          <div className="sample-features"><span>01 <b>Your services</b></span><span>02 <b>Your work</b></span><span>03 <b>Get in touch</b></span></div>
-        </div>
-        <div className="illustration-caption"><Smartphone size={16}/> Designed for the way customers browse <span>Design illustration</span></div>
-      </div>
+    <section className="hero website-hero conversion-hero"><div className="container hero-grid">
+      <div className="hero-copy"><div className="eyebrow">Custom website design &amp; development</div><h1 className="display website-display">Make your business<br/><span className="blue">easier to choose.</span></h1><p className="lede">A custom website that explains your value, showcases your work and gives visitors a clear next step. Planned, designed and built with Jaden Shipley.</p><div className="hero-actions"><Link className="btn btn-primary" href="/contact">Request a Website Quote <ArrowRight size={18}/></Link><a className="btn btn-secondary" href="#selected-work">See the Work</a></div><p className="quote-explainer">Share your requirements. We’ll follow up to define the scope, pricing and proposed timeline.</p><div className="hero-proof"><span><Check size={15}/> Direct access to the founder</span><span><Check size={15}/> New websites &amp; redesigns</span></div></div>
+      <ProjectShowcase />
     </div></section>
-    <div className="website-strip"><div className="container"><span><Check size={17}/> A clear message</span><span><Check size={17}/> A thoughtful mobile experience</span><span><Check size={17}/> A simple path to inquiries</span></div></div>
-    <section className="section"><div className="container">
-      <div className="section-head"><div><div className="eyebrow">Start with the essentials</div><h2 className="h2">Make it easier<br/>to choose your business.</h2></div><p className="lede section-copy">Your website should answer the questions a customer has before they reach out.</p></div>
-      <div className="grid-3">{[
-        { Icon: LayoutTemplate, title: 'Explain your offer', copy: 'Put your services, service area and strengths into words people can understand quickly.' },
-        { Icon: Smartphone, title: 'Build confidence', copy: 'Bring your brand, real work and business details together in a layout that works on phones and desktops.' },
-        { Icon: MessageSquare, title: 'Make contact simple', copy: 'Give visitors a clear way to call, request a quote or ask about a project, without making them hunt for it.' },
-      ].map(({ Icon, title, copy }) => <article className="card service-card" key={title}><div className="card-icon"><Icon size={21}/></div><h3>{title}</h3><p>{copy}</p></article>)}</div>
-      <Link className="text-link section-link" href="/services">See what goes into your website <ArrowRight size={17}/></Link>
-    </div></section>
-    <section className="section work-section"><div className="container">
-      <div className="section-head"><div><div className="eyebrow">Selected work</div><h2 className="h2">See the thinking<br/>in practice.</h2></div><p className="lede section-copy">A service business and a personal brand. These founder-owned projects show two different ways to tell a clear story online.</p></div>
-      <ProjectExamples compact /><Link className="text-link section-link" href="/work">Explore the projects <ArrowRight size={17}/></Link>
-    </div></section>
-    <section className="section" id="process"><div className="container">
-      <div className="section-head"><div><div className="eyebrow">How it works</div><h2 className="h2">From the first conversation<br/>to your new website.</h2></div><p className="lede section-copy">A defined scope, room for your feedback, and a clear next step at each stage.</p></div><WebsiteProcess />
-    </div></section>
-    <section className="section-tight"><div className="container split review-feature">
-      <div><div className="eyebrow">Already have a website?</div><h2 className="h2">Get a fresh pair of eyes on it.</h2><p className="lede">Jaden will personally review your website’s message, mobile experience and inquiry path, then email you practical suggestions.</p><Link href="/audit" className="btn btn-secondary">Request a Free Website Review <ArrowRight size={18}/></Link></div>
-      <div className="review-checklist"><span className="pill">PERSONALLY REVIEWED</span><h3>What we’ll look at</h3>{['Is it clear what you do and who you help?','Can customers find what they need on mobile?','Is the next step easy to spot and complete?'].map(item=><p key={item}><Check size={18}/>{item}</p>)}<small>No cost. No obligation to start a project.</small></div>
-    </div></section>
-    <section className="section"><div className="container support-row"><div className="card-icon"><Workflow size={23}/></div><div><div className="eyebrow">Build on the foundation</div><h2>Need help after the inquiry?</h2><p>CRM setup, follow-up workflows, automation and local visibility can be scoped alongside your website or as a later project.</p></div><Link href="/services#supporting-services" className="text-link">Explore supporting services <ArrowRight size={17}/></Link></div></section>
-    <section className="section-tight"><div className="container cta"><div><h2>Let’s build a website<br/>that fits your business.</h2><p className="lede cta-copy">Tell us what you do and what your website needs to achieve.</p></div><Link className="btn btn-primary" href="/contact">Discuss Your Website <ArrowRight size={18}/></Link></div></section>
+    <div className="website-strip"><div className="container"><span><Check size={17}/> Clear service &amp; brand messaging</span><span><Check size={17}/> Desktop &amp; mobile design</span><span><Check size={17}/> Forms &amp; inquiry pathways</span></div></div>
+    <section className="section work-section" id="selected-work"><div className="container"><div className="section-head"><div><div className="eyebrow">Selected work</div><h2 className="h2">See the design.<br/>Explore the thinking.</h2></div><p className="lede section-copy">Two founder-owned projects, built for different audiences. Explore the layouts, then visit the full websites.</p></div><ProjectExamples compact/><Link className="text-link section-link" href="/work">See the project goals &amp; design decisions <ArrowRight size={17}/></Link></div></section>
+    <section className="section"><div className="container"><div className="section-head"><div><div className="eyebrow">Built around the customer journey</div><h2 className="h2">A clear message.<br/>A confident next step.</h2></div><p className="lede section-copy">We plan the pages and functionality around what visitors need to understand and do.</p></div><div className="grid-3">{[
+      {Icon:LayoutTemplate,title:'Explain what makes you valuable',copy:'Page structure, service or product content, and a visual direction that puts your business in context.'},
+      {Icon:Smartphone,title:'Show up well on every screen',copy:'Responsive layouts, readable content and navigation designed for phones, tablets and desktops.'},
+      {Icon:MessageSquare,title:'Make it easy to reach you',copy:'Clear calls to action and inquiry forms, with booking or CRM connections scoped when your project needs them.'},
+    ].map(({Icon,title,copy})=><article className="card service-card" key={title}><div className="card-icon"><Icon size={21}/></div><h3>{title}</h3><p>{copy}</p></article>)}</div><Link className="text-link section-link" href="/services">Explore deliverables, options &amp; project details <ArrowRight size={17}/></Link></div></section>
+    <section className="section-tight"><div className="container quote-panel"><div><div className="eyebrow">Before you commit</div><h2 className="h2">Know what you’re buying.</h2><p className="lede">We discuss your requirements, then put the proposed work in writing. You can review the scope before deciding to move forward.</p><Link className="btn btn-primary" href="/contact">Request a Website Quote <ArrowRight size={18}/></Link></div><ol className="quote-deliverables"><li><span>01</span><div><h3>Defined deliverables</h3><p>Pages, features, content responsibilities and revision stages.</p></div></li><li><span>02</span><div><h3>Project pricing</h3><p>The build cost and any proposed hosting, tools or ongoing support.</p></div></li><li><span>03</span><div><h3>Proposed timeline</h3><p>Milestones, feedback points and what we need from your team.</p></div></li></ol></div></section>
+    <section className="section" id="process"><div className="container"><div className="section-head"><div><div className="eyebrow">How it works</div><h2 className="h2">One point of contact.<br/>A defined path to launch.</h2></div><p className="lede section-copy">Work directly with Jaden. For company teams, we agree on the stakeholders and approval process during planning.</p></div><WebsiteProcess /></div></section>
+    <section className="section-tight"><div className="container split review-feature"><div><div className="eyebrow">Want feedback before a quote?</div><h2 className="h2">Start with a free<br/>website review.</h2><p className="lede">Jaden will personally review your website’s message, mobile experience and inquiry path, then email you practical suggestions.</p><Link href="/audit" className="btn btn-secondary">Request a Free Website Review <ArrowRight size={18}/></Link></div><div className="review-checklist"><span className="pill">PERSONALLY REVIEWED</span><h3>A useful first look.</h3>{['Can visitors understand your offer?','Can they find what they need on mobile?','Is contacting you straightforward?'].map(item=><p key={item}><Check size={18}/>{item}</p>)}<small>No cost. No obligation to start a project.</small></div></div></section>
+    <section className="section"><div className="container support-row"><div className="card-icon"><Workflow size={23}/></div><div><div className="eyebrow">Connect what comes next</div><h2>Need CRM or automation too?</h2><p>We can scope lead follow-up, integrations and supporting systems around your website project.</p></div><Link href="/services#supporting-services" className="text-link">Supporting services <ArrowRight size={17}/></Link></div></section>
+    <section className="section-tight"><div className="container cta"><div><h2>Tell us what your<br/>website needs to do.</h2><p className="lede cta-copy">Start with your goals. Get a clear proposal for the work.</p></div><Link className="btn btn-primary" href="/contact">Request a Website Quote <ArrowRight size={18}/></Link></div></section>
   </main>;
 }

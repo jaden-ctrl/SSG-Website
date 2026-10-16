@@ -4,7 +4,7 @@ Production-oriented Next.js website for SSG.
 
 ## Website-first release — October 15, 2026
 
-The primary offer is a website project. Navigation: Websites (`/services`), Our Work (`/work`), About (`/about`), Free Website Review (`/audit`), and Discuss Your Website (`/contact`). CRM, automation and local visibility are supporting services. Existing URLs and founder entity IDs remain stable.
+The primary offer is a website project. Navigation: Websites (`/services`), Our Work (`/work`), About (`/about`), Free Website Review (`/audit`), and Request a Website Quote (`/contact`). CRM, automation and local visibility are supporting services. Existing URLs and founder entity IDs remain stable.
 
 The homepage leads with the website offer, practical outcomes, clearly disclosed founder-owned work, the four-stage project process, and a manual review option. No prices, sales results or customer testimonials have been invented. The selected projects are Shipley’s Detailing and Jaden Shipley’s own site.
 
@@ -102,3 +102,9 @@ Retained backend code may reference these variables. They are not required by th
 - `SSGAI_AGENT_RELEASE_ID` (use an immutable release ID in production)
 
 Optional values are documented in `.env.example`. The temporary reviewer API is `POST /api/admin/reviews`; place it behind SSG staff identity and role authorization before broad production use.
+
+## Visual work and quote flow — October 15, 2026
+
+The homepage now leads with a specific custom-website offer, an interactive project design excerpt, and Request a Website Quote. The original detailing photograph and personal portrait are copied into public/projects from the existing project assets. These responsive HTML previews are labeled design excerpts, not screenshots, and link to the complete websites. No client results are implied.
+
+The work section appears immediately after the hero and capability strip. Project goals and design decisions are documented. The quote page explains requirements, scope, pricing and timeline; the optional planning budget uses the existing HubSpot mapping. Services explain content, revisions, stakeholders, hosting and support as proposal-defined terms. Manual website review behavior is unchanged.

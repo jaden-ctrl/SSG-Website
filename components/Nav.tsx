@@ -29,7 +29,7 @@ export default function Nav() {
         </Link>
         <nav className="navlinks" aria-label="Main navigation">
           {links.map(([href, label]) => <Link key={href} href={href} aria-current={pathname === href ? 'page' : undefined}>{label}</Link>)}
-          <Link className="btn btn-primary" href="/contact">Discuss Your Website</Link>
+          <Link className="btn btn-primary" href="/contact">Request a Website Quote</Link>
         </nav>
         <button className="menu-toggle" type="button" aria-label={open ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={open} aria-controls="mobile-navigation" onClick={() => setOpen((value) => !value)}>
           {open ? <X size={23} /> : <Menu size={23} />}
@@ -38,7 +38,7 @@ export default function Nav() {
       <nav id="mobile-navigation" className={`mobile-nav ${open ? 'is-open' : ''}`} aria-label="Mobile navigation">
         <div className="container mobile-nav-inner">
           {links.map(([href, label], index) => <Link key={href} href={href} aria-current={pathname === href ? 'page' : undefined} onClick={() => setOpen(false)} style={{ '--menu-index': index } as React.CSSProperties}>{label}</Link>)}
-          <Link className="btn btn-primary" href="/contact" onClick={() => setOpen(false)} style={{ '--menu-index': 4 } as React.CSSProperties}>Discuss Your Website</Link>
+          <Link className="btn btn-primary" href="/contact" onClick={() => setOpen(false)} style={{ '--menu-index': 4 } as React.CSSProperties}>Request a Website Quote</Link>
         </div>
       </nav>
     </header>
