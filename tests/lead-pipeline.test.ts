@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { NextRequest } from 'next/server';
 import { POST as postLead } from '@/app/api/lead/route';
 import { privateJsonStore, type JsonStore } from '@/lib/blob-store';
+import { businessDomain } from '@/lib/hubspot/lead-automation';
 import { createFailingCrm, createMemoryCrm, type Crm } from '@/lib/lead/crm';
 import { acceptLead, type IntakeOptions } from '@/lib/lead/intake';
 import { createMailer, type Mail } from '@/lib/lead/notify';
@@ -30,9 +31,9 @@ function env(extra: Record<string, string | undefined> = {}): NodeJS.ProcessEnv 
     NOTIFY_EMAIL_FROM: 'SSG <leads@example.com>',
     LEAD_MAX_ATTEMPTS: '6',
     LEAD_LOCK_RETRY_MS: '200',
-    LEAD_RL_IP: '5',
-    LEAD_RL_EMAIL: '3',
-    LEAD_RL_GLOBAL: '60',
+    LEAD_RL_IP_PER_10M: '5',
+    LEAD_RL_EMAIL_PER_10M: '3',
+    LEAD_RL_GLOBAL_PER_10M: '60',
     ...extra,
   } as unknown as NodeJS.ProcessEnv;
 }
@@ -334,6 +335,7 @@ test('HubSpot downtime persists then recovers, both stores failing is a 502, and
   };
   const both = await acceptLead(JSON.stringify(leadBody({ client_submission_id: CID_2 })), null, headers(), options(broken, createFailingCrm('down'), { now: () => clock.now }));
   assert.equal(both.status, 502);
+  assert.equal(both.body.ok, false);
 
   resetOwnerCache();
   const dlqStore = privateJsonStore();
@@ -473,4 +475,155 @@ test('the route reports mock mode without a contact id and does not call the leg
   const scheduled = readFileSync(new URL('../netlify/functions/lead-retry.mts', import.meta.url), 'utf8');
   assert.match(scheduled, /schedule:\s*"\*\/10 \* \* \* \*"/);
   assert.match(scheduled, /runDue/);
+});
+
+test('email domain is preferred over the typed website', () => {
+  assert.equal(businessDomain('https://typed.example', 'owner@existingco.com'), 'existingco.com');
+  assert.equal(businessDomain('https://shipleysolutionsgroup.com', ''), 'shipleysolutionsgroup.com');
+  assert.equal(businessDomain('https://shipleysolutionsgroup.com', 'visitor@gmail.com'), null);
+  assert.equal(businessDomain('https://shipleysolutionsgroup.com', 'visitor@yahoo.com'), null);
+  assert.equal(businessDomain('https://shipleysolutionsgroup.com', 'visitor@outlook.com'), null);
+  assert.equal(businessDomain('https://shipleysolutionsgroup.com', 'visitor@hotmail.com'), null);
+  assert.equal(businessDomain('https://shipleysolutionsgroup.com', 'visitor@icloud.com'), null);
+  assert.equal(businessDomain('https://shipleysolutionsgroup.com', 'visitor@aol.com'), null);
+  assert.equal(businessDomain('https://shipleysolutionsgroup.com', 'visitor@proton.me'), null);
+});
+
+test('gmail with website shipleysolutionsgroup.com does not link a company', async () => {
+  resetOwnerCache();
+  const store = privateJsonStore();
+  const crm = createMemoryCrm({ permissiveOwners: true });
+  crm.state.companies.push({ id: 'ssg', properties: { domain: 'shipleysolutionsgroup.com', name: 'Shipley Solutions Group' } });
+  const result = await acceptLead(JSON.stringify(leadBody({
+    email: 'visitor@gmail.com',
+    website: 'https://shipleysolutionsgroup.com',
+    company: 'Typed Co',
+  })), null, headers(), options(store, crm));
+  assert.equal(result.status, 200);
+  assert.equal(crm.state.contactCompany.size, 0);
+  assert.equal(crm.state.calls.some((call) => call.path.includes('/companies/search')), false);
+  assert.equal(crm.state.calls.some((call) => call.method === 'PUT' && call.path.includes('/associations/default/company/')), false);
+  assert.equal(crm.state.contacts.length, 1);
+  assert.match(crm.state.contacts[0].properties.website, /shipleysolutionsgroup\.com/);
+  const saved = await store.get((await store.list({ prefix: 'sub/' })).blobs[0].key) as SubmissionRecord;
+  assert.equal(saved.steps.company.status, 'skipped');
+  assert.equal(saved.steps.company.ref, 'no_business_domain');
+
+  const linked = createMemoryCrm({ permissiveOwners: true });
+  const linkedStore = privateJsonStore();
+  await acceptLead(JSON.stringify(leadBody({
+    email: 'owner@existingco.com',
+    website: 'https://typed.example',
+    company: 'Existing Co',
+    client_submission_id: CID_2,
+  })), null, headers(), options(linkedStore, linked));
+  assert.equal(linked.state.contactCompany.get(linked.state.contacts[0].id), 'c1');
+  assert.equal(linked.state.companies.some((company) => company.properties.domain === 'typed.example'), false);
+});
+
+function captureWarn(run: () => Promise<void>): Promise<string[]> {
+  const lines: string[] = [];
+  const original = console.warn;
+  console.warn = (chunk?: unknown) => { lines.push(String(chunk)); };
+  return run().finally(() => { console.warn = original; }).then(() => lines);
+}
+
+test('lead_automation_disabled is logged when the flag is unset', async () => {
+  resetOwnerCache();
+  const store = privateJsonStore();
+  const lines = await captureWarn(() => acceptLead(JSON.stringify(leadBody()), null, headers(), options(store, createMemoryCrm({ permissiveOwners: true }), {
+    env: env({ LEAD_AUTOMATION_ENABLED: 'false' }),
+  })).then(() => undefined));
+  assert.ok(lines.some((line) => line.includes('lead_automation_disabled') && line.includes('"steps":"task,notify"')));
+});
+
+test('honeypot and link spam are logged as lead_spam_skipped', async () => {
+  resetOwnerCache();
+  const store = privateJsonStore();
+  const crm = createMemoryCrm({ permissiveOwners: true });
+  const lines = await captureWarn(async () => {
+    const honeypot = await acceptLead(JSON.stringify(leadBody({ faxNumber: '555-0100' })), null, headers(), options(store, crm));
+    assert.equal(honeypot.status, 200);
+    assert.equal(honeypot.body.ok, true);
+    assert.equal(crm.state.contacts.length, 0);
+    const links = await acceptLead(JSON.stringify(leadBody({
+      message: 'See https://a.example https://b.example https://c.example and https://d.example today.',
+      client_submission_id: CID_2,
+    })), null, headers(), options(store, crm));
+    assert.equal(links.status, 200);
+  });
+  assert.ok(lines.some((line) => line.includes('lead_spam_skipped') && line.includes('honeypot') && line.includes('crm,task,notify')));
+  assert.ok(lines.some((line) => line.includes('lead_spam_skipped') && line.includes('too_many_links') && line.includes('task,notify')));
+});
+
+test('missing LEAD_HASH_SALT is logged and rate limit fails open', async () => {
+  resetOwnerCache();
+  const store = privateJsonStore();
+  const lines = await captureWarn(async () => {
+    for (let i = 0; i < 6; i += 1) {
+      const result = await acceptLead(JSON.stringify(leadBody({
+        email: `open${i}@example.com`,
+        message: `Salt missing inquiry number ${i}.`,
+        client_submission_id: `6666666${i}-6666-4666-8666-666666666666`,
+      })), null, headers('203.0.113.80'), options(store, createMemoryCrm({ permissiveOwners: true }), {
+        env: env({ LEAD_HASH_SALT: '' }),
+      }));
+      assert.equal(result.status, 200, `request ${i}`);
+    }
+  });
+  assert.ok(lines.some((line) => line.includes('lead_ratelimit_unavailable') && line.includes('LEAD_HASH_SALT')));
+});
+
+test('a live webhook is scheduled after the response instead of blocking it', async () => {
+  resetOwnerCache();
+  const store = privateJsonStore();
+  const crm = createMemoryCrm({ permissiveOwners: true });
+  let queued: (() => Promise<unknown>) | undefined;
+  const started = Date.now();
+  const result = await acceptLead(JSON.stringify(leadBody()), null, headers(), options(store, crm, {
+    decision: { mode: 'live', block: null },
+    env: env({
+      HUBSPOT_ACCESS_TOKEN: 'not-sent',
+      LEAD_WEBHOOK_URL: 'https://hooks.example/lead',
+      LEAD_WEBHOOK_AUTHORIZED: 'true',
+      LEAD_WEBHOOK_SECRET: 'w'.repeat(40),
+    }),
+    schedule: (work) => { queued = work; },
+  }));
+  const elapsed = Date.now() - started;
+  assert.ok(elapsed < 1000, `visitor waited ${elapsed}ms`);
+  assert.equal(result.status, 200);
+  assert.equal(result.body.ok, true);
+  const key = (await store.list({ prefix: 'sub/' })).blobs[0].key;
+  const saved = await store.get(key) as SubmissionRecord;
+  assert.equal(saved.steps.webhook.status, 'pending');
+  assert.equal(saved.state, 'retry_scheduled');
+  assert.equal(typeof queued, 'function');
+  await queued!();
+  const finished = await store.get(key) as SubmissionRecord;
+  assert.equal(finished.steps.webhook.status, 'skipped');
+  assert.equal(finished.steps.webhook.err, 'webhook_disabled');
+});
+
+test('live-test alerts go to NOTIFY_EMAIL_TEST_TO', async () => {
+  resetOwnerCache();
+  const store = privateJsonStore();
+  const mail = spyMailer();
+  const result = await acceptLead(JSON.stringify(leadBody()), null, headers(), options(store, createFailingCrm('down'), {
+    decision: { mode: 'live-test', block: null },
+    mailer: mail.mailer,
+    env: env({
+      LEAD_MAX_ATTEMPTS: '1',
+      NOTIFY_EMAIL_TO: 'prod-owner@example.com',
+      NOTIFY_EMAIL_FROM: 'SSG <leads@shipleysolutionsgroup.com>',
+      NOTIFY_EMAIL_TEST_TO: 'qa-alerts@example.com',
+      NOTIFY_EMAIL_TEST_FROM: 'SSG <qa@shipleysolutionsgroup.com>',
+    }),
+  }));
+  assert.equal(result.status, 200);
+  const alerts = mail.sent.filter((message) => message.subject === '[SSG intake] Lead needs attention');
+  assert.equal(alerts.length, 1);
+  assert.deepEqual(alerts[0].to, ['qa-alerts@example.com']);
+  assert.equal(alerts[0].from, 'SSG <qa@shipleysolutionsgroup.com>');
+  assert.equal(alerts[0].to.includes('prod-owner@example.com'), false);
 });

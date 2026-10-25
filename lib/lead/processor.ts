@@ -1,17 +1,17 @@
-import type { JsonStore } from "@/lib/blob-store";
-import { businessDomain, recordUrl, spamReason } from "@/lib/hubspot/lead-automation";
-import type { Crm } from "@/lib/lead/crm";
-import { errorClass } from "@/lib/lead/crm";
-import { decryptJson } from "@/lib/lead/crypto";
-import { escapeHtml, hubspotMessage } from "@/lib/lead/message";
-import { logLead } from "@/lib/lead/log";
-import type { Mailer } from "@/lib/lead/notify";
-import { resolveOwner } from "@/lib/lead/owners";
-import { createNote, ensureInquiryTask, TASK_SUBJECT_PREFIX } from "@/lib/lead/tasks";
-import { emptySteps, type LeadInput, type StepName, type StepState, type StepStatus, type StoredLead, type SubmissionRecord } from "@/lib/lead/types";
-import { buildWebhookBody, signWebhook, webhookGate } from "@/lib/lead/webhook";
-import { outboundFetch } from "@/lib/gateway";
-import type { ModeDecision } from "@/lib/runtime-mode";
+import type { JsonStore } from "../blob-store";
+import { businessDomain, recordUrl, spamReason } from "../hubspot/lead-automation";
+import type { Crm } from "./crm";
+import { errorClass } from "./crm";
+import { decryptJson } from "./crypto";
+import { escapeHtml, hubspotMessage } from "./message";
+import { logLead } from "./log";
+import type { Mailer } from "./notify";
+import { resolveOwner } from "./owners";
+import { createNote, ensureInquiryTask, TASK_SUBJECT_PREFIX } from "./tasks";
+import { emptySteps, type LeadInput, type StepName, type StepState, type StepStatus, type StoredLead, type SubmissionRecord } from "./types";
+import { buildWebhookBody, signWebhook, webhookGate } from "./webhook";
+import { outboundFetch } from "../gateway";
+import type { ModeDecision } from "../runtime-mode";
 
 const BACKOFF_MS = [5 * 60_000, 15 * 60_000, 60 * 60_000, 4 * 60 * 60_000, 12 * 60 * 60_000];
 
@@ -22,6 +22,8 @@ export type ProcessDeps = {
   env: NodeJS.ProcessEnv;
   now: () => number;
   decision: ModeDecision;
+  /** Runs after the visitor response. Cron omits this and delivers inline. */
+  schedule?: (work: () => Promise<unknown>) => void;
 };
 
 function numberEnv(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
@@ -87,6 +89,12 @@ export async function processSubmission(subKey: string, deps: ProcessDeps): Prom
   }
 
   if (!automation || links) {
+    if (!automation) {
+      logLead("warn", "lead_automation_disabled", { submission_id: subKey.slice(0, 12), steps: "task,notify" });
+    }
+    if (links) {
+      logLead("warn", "lead_spam_skipped", { submission_id: subKey.slice(0, 12), reason: links, steps: "task,notify" });
+    }
     record = await save(deps, subKey, (current) => {
       for (const step of ["owner", "company", "note", "task", "notify"] as StepName[]) {
         if (current.steps[step].status === "pending") current.steps[step] = { status: "skipped", err: links ? `spam:${links}` : "automation_disabled" };
@@ -97,12 +105,37 @@ export async function processSubmission(subKey: string, deps: ProcessDeps): Prom
     record = await runAutomation(deps, record, lead, stored);
   }
 
-  if (record.steps.webhook.status === "pending" || record.steps.webhook.status === "failed" || record.steps.webhook.status === "unknown" || record.steps.webhook.status === "deferred") {
-    const webhook = await deliverWebhook(deps, lead, record.contactId, subKey, stored.receivedAt);
-    record = await save(deps, subKey, (current) => finish(current, "webhook", webhook.status, { err: webhook.err, ref: webhook.ref }));
+  const gate = webhookGate(deps.env);
+  const deferWebhook = webhookOpen(record) && deps.decision.mode === "live" && gate.enabled && typeof deps.schedule === "function";
+  if (webhookOpen(record) && !deferWebhook) {
+    record = await applyWebhook(deps, record, lead, subKey, stored.receivedAt);
   }
 
-  return settle(deps, record, subKey);
+  const settled = await settle(deps, record, subKey, { ignoreWebhook: deferWebhook });
+  if (deferWebhook && deps.schedule) {
+    const follow: ProcessDeps = { ...deps, schedule: undefined };
+    deps.schedule(() => finishWebhook(subKey, follow));
+  }
+  return settled;
+}
+
+function webhookOpen(record: SubmissionRecord): boolean {
+  return ["pending", "failed", "unknown", "deferred"].includes(record.steps.webhook.status);
+}
+
+async function applyWebhook(deps: ProcessDeps, record: SubmissionRecord, lead: LeadInput, subKey: string, receivedAt: number): Promise<SubmissionRecord> {
+  const webhook = await deliverWebhook(deps, lead, record.contactId, subKey, receivedAt);
+  return save(deps, subKey, (current) => finish(current, "webhook", webhook.status, { err: webhook.err, ref: webhook.ref }));
+}
+
+/** Background delivery. The visitor response has already been sent. */
+export async function finishWebhook(subKey: string, deps: ProcessDeps): Promise<SubmissionRecord | null> {
+  const key = deps.env.LEAD_STORE_KEY || "";
+  const current = await deps.store.get(`sub/${subKey}`) as SubmissionRecord | null;
+  if (!current || !webhookOpen(current)) return current;
+  const stored = decryptJson<StoredLead>(current.payload, key);
+  const updated = await applyWebhook(deps, current, stored.lead, subKey, stored.receivedAt);
+  return settle(deps, updated, subKey, { webhookOnly: true });
 }
 
 async function runAutomation(deps: ProcessDeps, record: SubmissionRecord, lead: LeadInput, stored: StoredLead): Promise<SubmissionRecord> {
@@ -309,8 +342,9 @@ async function deliverWebhook(deps: ProcessDeps, lead: LeadInput, contactId: str
 }
 
 async function alert(deps: ProcessDeps, record: SubmissionRecord, reason: string) {
-  const to = (deps.env.NOTIFY_EMAIL_TO || deps.env.NOTIFY_EMAIL_TEST_TO || "").split(",").map((item) => item.trim()).filter(Boolean);
-  const from = deps.env.NOTIFY_EMAIL_FROM || deps.env.NOTIFY_EMAIL_TEST_FROM || "";
+  const liveTest = deps.decision.mode === "live-test";
+  const to = ((liveTest ? deps.env.NOTIFY_EMAIL_TEST_TO : deps.env.NOTIFY_EMAIL_TO) || "").split(",").map((item) => item.trim()).filter(Boolean);
+  const from = (liveTest ? deps.env.NOTIFY_EMAIL_TEST_FROM || deps.env.NOTIFY_EMAIL_FROM : deps.env.NOTIFY_EMAIL_FROM) || "";
   if (!to.length || !from) return;
   await deps.mailer.send({
     to,
@@ -322,14 +356,30 @@ async function alert(deps: ProcessDeps, record: SubmissionRecord, reason: string
   logLead("error", "lead_dead_letter", { submission_id: record.subKey.slice(0, 12), reason });
 }
 
-async function settle(deps: ProcessDeps, record: SubmissionRecord, subKey: string): Promise<SubmissionRecord> {
-  const waiting = Object.values(record.steps).some((step) => ["pending", "unknown", "deferred", "failed", "blocked_needs_owner"].includes(step.status));
+function stepWaiting(step: StepState): boolean {
+  return ["pending", "unknown", "deferred", "failed", "blocked_needs_owner"].includes(step.status);
+}
+
+async function settle(deps: ProcessDeps, record: SubmissionRecord, subKey: string, options?: { ignoreWebhook?: boolean; webhookOnly?: boolean }): Promise<SubmissionRecord> {
+  const waiting = (Object.entries(record.steps) as [StepName, StepState][]).some(([name, step]) => {
+    if (options?.ignoreWebhook && name === "webhook") return false;
+    return stepWaiting(step);
+  });
+  const webhookHeld = Boolean(options?.ignoreWebhook && stepWaiting(record.steps.webhook));
   if (!waiting) {
+    if (webhookHeld) {
+      await deps.store.setJSON(`queue/${subKey}`, { at: record.createdAt });
+      return save(deps, subKey, (current) => ({ ...current, state: "retry_scheduled", nextAttemptAt: deps.now() + 30_000 }));
+    }
     record = await save(deps, subKey, (current) => ({ ...current, state: "completed" }));
     await deps.store.delete(`queue/${subKey}`);
     return record;
   }
-  const permanent = record.lastErrorClass === "permanent" || Object.values(record.steps).some((step) => step.err === "webhook_permanent");
+  const webhookPermanent = record.steps.webhook.err === "webhook_permanent";
+  if (options?.webhookOnly && !webhookPermanent && record.state === "retry_scheduled" && record.nextAttemptAt > deps.now()) {
+    return record;
+  }
+  const permanent = record.lastErrorClass === "permanent" || webhookPermanent;
   const attempts = record.attempts + 1;
   const max = numberEnv(deps.env, "LEAD_MAX_ATTEMPTS", 6);
   if (permanent || attempts >= max) {

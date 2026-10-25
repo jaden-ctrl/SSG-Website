@@ -24,7 +24,20 @@ export type IntakeOptions = {
   crm?: Crm;
   mailer?: Mailer;
   decision?: ModeDecision;
+  /** Replaces the default after()/setImmediate handoff. Tests use this to prove the webhook is not awaited. */
+  schedule?: (work: () => Promise<unknown>) => void;
 };
+
+function scheduleOffRequest(work: () => Promise<unknown>): void {
+  const start = () => {
+    void work();
+  };
+  try {
+    after(start);
+  } catch {
+    setImmediate(start);
+  }
+}
 
 function numberEnv(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
   const value = Number(env[name] ?? fallback);
@@ -78,9 +91,18 @@ export async function acceptLead(raw: string, contentLength: string | null, head
   const recordEnv = durable ? env : { ...env, LEAD_STORE_KEY: recordKey };
   const crm = options.crm ?? createLiveCrm();
   const mailer = options.mailer ?? createMailer(decision, env);
-  const deps: ProcessDeps = { store: recordStore, crm, mailer, env: recordEnv, now, decision };
+  const deps: ProcessDeps = {
+    store: recordStore,
+    crm,
+    mailer,
+    env: recordEnv,
+    now,
+    decision,
+    schedule: options.schedule ?? scheduleOffRequest,
+  };
 
   if (validation.spam) {
+    logLead("warn", "lead_spam_skipped", { reason: validation.spam, steps: "crm,task,notify" });
     const stamp = new Date(now()).toISOString();
     await shared.setJSON(`spam/${validation.spam}/${stamp}`, { at: stamp, reason: validation.spam }).catch(() => undefined);
     return { status: 200, body: { ok: true } };
@@ -111,9 +133,9 @@ export async function acceptLead(raw: string, contentLength: string | null, head
     ip: clientIp(headers),
     email: lead.email,
     limits: {
-      ip: numberEnv(env, "LEAD_RL_IP", 5),
-      email: numberEnv(env, "LEAD_RL_EMAIL", 3),
-      global: numberEnv(env, "LEAD_RL_GLOBAL", 60),
+      ip: numberEnv(env, "LEAD_RL_IP_PER_10M", 5),
+      email: numberEnv(env, "LEAD_RL_EMAIL_PER_10M", 3),
+      global: numberEnv(env, "LEAD_RL_GLOBAL_PER_10M", 60),
     },
   });
   if (limit.status === "limited") {

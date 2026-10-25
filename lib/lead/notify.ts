@@ -1,6 +1,6 @@
-import { outboundFetch, outboundSmtp } from "@/lib/gateway";
-import type { ModeDecision } from "@/lib/runtime-mode";
-import { logLead } from "@/lib/lead/log";
+import { outboundFetch, outboundSmtp } from "../gateway";
+import type { ModeDecision } from "../runtime-mode";
+import { logLead } from "./log";
 
 export type Mail = { to: string[]; from: string; subject: string; text: string; idempotencyKey: string };
 export type Mailer = { send(mail: Mail): Promise<{ id?: string; skipped?: string; status: number }> };

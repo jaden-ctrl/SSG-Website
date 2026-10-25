@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { SSG_BUILD_CONTEXT } from "@/lib/build-context.generated";
+import { SSG_BUILD_CONTEXT } from "./build-context.generated";
 
 /**
  * Fail-closed integration mode for every paid or mutating outbound call.
@@ -11,8 +11,9 @@ import { SSG_BUILD_CONTEXT } from "@/lib/build-context.generated";
  *
  * Live production calls require both:
  * 1. The build-baked context is exactly "production" (scripts/write-build-context.mjs).
- * 2. The request host, or the site URL host when there is no request, is on
- *    LEAD_PRODUCTION_HOSTS (default: the SSG apex and www host).
+ * 2. The request Host header, or the site URL host when there is no request,
+ *    is on LEAD_PRODUCTION_HOSTS (default: the SSG apex and www host).
+ *    X-Forwarded-Host is used only when it matches Host.
  *
  * A runtime CONTEXT value, when present, can only force mock. It cannot
  * promote a preview build to live. A production credential never enables live
@@ -51,7 +52,16 @@ export function normalizeHost(value: string | null | undefined): string | null {
 }
 
 export function hostFromHeaders(headers: { get(name: string): string | null }): string | null {
-  return normalizeHost(headers.get("x-forwarded-host")) || normalizeHost(headers.get("host"));
+  const host = normalizeHost(headers.get("host"));
+  const forwarded = normalizeHost(headers.get("x-forwarded-host"));
+  if (host && forwarded && host === forwarded) return host;
+  if (host) return host;
+  return null;
+}
+
+/** A production build that still resolved to mock must not pretend the lead was stored. */
+export function productionModeMismatch(buildContext: string, decision: ModeDecision): boolean {
+  return buildContext === "production" && decision.mode === "mock";
 }
 
 export function hostFromUrl(value: string | undefined): string | null {

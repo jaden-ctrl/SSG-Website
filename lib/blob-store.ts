@@ -5,7 +5,7 @@ import {
   hostFromUrl,
   readBuildContext,
   type Env,
-} from "@/lib/runtime-mode";
+} from "./runtime-mode";
 
 /**
  * Production blob names are used only in live mode. Preview and other

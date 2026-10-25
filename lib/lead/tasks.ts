@@ -1,7 +1,7 @@
-import type { JsonStore } from "@/lib/blob-store";
-import type { Crm } from "@/lib/lead/crm";
-import { keyTag } from "@/lib/lead/subkey";
-import { logLead } from "@/lib/lead/log";
+import type { JsonStore } from "../blob-store";
+import type { Crm } from "./crm";
+import { keyTag } from "./subkey";
+import { logLead } from "./log";
 
 export const TASK_SUBJECT_PREFIX = "SSG Web Inquiry:";
 const TASK_CONTACT = 204;

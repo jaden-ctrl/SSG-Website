@@ -7,7 +7,7 @@ import { currentDecision } from "../../lib/runtime-mode";
 /**
  * Production scheduled retry. Netlify runs scheduled functions only on the
  * published production deploy. Mock and blocked modes return without calling
- * HubSpot, email, or webhooks. Each run drains up to 8 due records and stops
+ * HubSpot, email, or an outbound POST. Each run drains up to 8 due records and stops
  * around 22s, then purges expired submissions, dead letters, spam, rate-limit
  * windows, and locks.
  */

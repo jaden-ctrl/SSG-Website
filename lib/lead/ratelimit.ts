@@ -12,7 +12,7 @@ export async function enforceRateLimit(input: {
 }): Promise<{ status: "ok" | "limited" | "open"; retryAfter: number }> {
   const retryAfter = Math.max(1, Math.ceil((600_000 - (input.now % 600_000)) / 1000));
   if (!input.salt || input.salt.length < 32) {
-    logLead("warn", "lead_ratelimit_unavailable", { reason: "salt" });
+    logLead("warn", "lead_ratelimit_unavailable", { reason: "salt", variable: "LEAD_HASH_SALT" });
     return { status: "open", retryAfter };
   }
   try {

@@ -1,5 +1,5 @@
-import { timelineLabel } from "@/lib/hubspot/lead-automation";
-import type { LeadInput } from "@/lib/lead/types";
+import { timelineLabel } from "../hubspot/lead-automation";
+import type { LeadInput } from "./types";
 
 export function consentLine(lead: LeadInput, atIso: string, version: string): string {
   return `Consent: yes, ${atIso}, text v${version}, form ${lead.form_variant}`;

@@ -1,7 +1,7 @@
-import type { JsonStore } from "@/lib/blob-store";
-import type { Crm } from "@/lib/lead/crm";
-import { errorClass } from "@/lib/lead/crm";
-import { logLead } from "@/lib/lead/log";
+import type { JsonStore } from "../blob-store";
+import type { Crm } from "./crm";
+import { errorClass } from "./crm";
+import { logLead } from "./log";
 
 const memory = new Map<string, { valid: boolean; at: number }>();
 

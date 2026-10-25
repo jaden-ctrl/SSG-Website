@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
-import { leadWebhookReady } from "@/lib/gateway";
-import type { Env } from "@/lib/runtime-mode";
-import type { LeadInput } from "@/lib/lead/types";
+import { leadWebhookReady } from "../gateway";
+import type { Env } from "../runtime-mode";
+import type { LeadInput } from "./types";
 
 export function buildWebhookBody(input: {
   subKey: string;

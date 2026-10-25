@@ -1,8 +1,59 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { cases, transition } from "@/lib/cases/repository";
 import { projectReleasedLead } from "@/lib/actions/leads";
 import { hostFromHeaders, runWithRequestHost } from "@/lib/runtime-mode";
-const bodySchema=z.object({caseId:z.string().uuid(),decision:z.enum(["approved","rejected"]),reviewer:z.string().min(2).max(120),notes:z.string().max(1000).optional()});
-export async function POST(request:Request){const expected=process.env.SSGAI_REVIEW_TOKEN;if(!expected||request.headers.get("authorization")!==`Bearer ${expected}`)return NextResponse.json({error:"Unauthorized"},{status:401});const input=bodySchema.parse(await request.json());let record=await cases.get(input.caseId);if(!record)return NextResponse.json({error:"Case not found"},{status:404});if(record.state!=="QA_PENDING")return NextResponse.json({error:`Case is ${record.state}`},{status:409});const review={reviewer:input.reviewer,decision:input.decision,decidedAt:new Date().toISOString(),notes:input.notes};if(input.decision==="rejected"){record=transition(record,"QA_PENDING","MANUAL_REVIEW",{review});await cases.save(record);return NextResponse.json({status:"manual_review"})}record=transition(record,"QA_PENDING","PREVIEW_APPROVED",{review});await cases.save(record);record=transition(record,"PREVIEW_APPROVED","PREVIEW_RELEASED",{releasedPreview:record.previewCandidate});await cases.save(record);await runWithRequestHost(hostFromHeaders(request.headers),()=>projectReleasedLead({...record.intake,id:record.caseId,createdAt:record.createdAt,status:"analyzed",audit:record.releasedPreview}));console.info(JSON.stringify({event:"preview_released",caseId:record.caseId,reviewer:input.reviewer}));return NextResponse.json({status:"released",caseId:record.caseId})}
 
+const bodySchema = z.object({
+  caseId: z.string().uuid(),
+  decision: z.enum(["approved", "rejected"]),
+  reviewer: z.string().min(2).max(120),
+  notes: z.string().max(1000).optional(),
+});
+
+function authorized(header: string | null, expected: string | undefined): boolean {
+  if (!expected) return false;
+  const provided = header?.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
+  const left = Buffer.from(provided);
+  const right = Buffer.from(expected);
+  if (left.length !== right.length || left.length === 0) return false;
+  return timingSafeEqual(left, right);
+}
+
+export async function POST(request: Request) {
+  if (!authorized(request.headers.get("authorization"), process.env.SSGAI_REVIEW_TOKEN)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  let json: unknown;
+  try {
+    json = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+  const parsed = bodySchema.safeParse(json);
+  if (!parsed.success) return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  const input = parsed.data;
+  let record = await cases.get(input.caseId);
+  if (!record) return NextResponse.json({ error: "Case not found" }, { status: 404 });
+  if (record.state !== "QA_PENDING") return NextResponse.json({ error: `Case is ${record.state}` }, { status: 409 });
+  const review = { reviewer: input.reviewer, decision: input.decision, decidedAt: new Date().toISOString(), notes: input.notes };
+  if (input.decision === "rejected") {
+    record = transition(record, "QA_PENDING", "MANUAL_REVIEW", { review });
+    await cases.save(record);
+    return NextResponse.json({ status: "manual_review" });
+  }
+  record = transition(record, "QA_PENDING", "PREVIEW_APPROVED", { review });
+  await cases.save(record);
+  record = transition(record, "PREVIEW_APPROVED", "PREVIEW_RELEASED", { releasedPreview: record.previewCandidate });
+  await cases.save(record);
+  await runWithRequestHost(hostFromHeaders(request.headers), () => projectReleasedLead({
+    ...record.intake,
+    id: record.caseId,
+    createdAt: record.createdAt,
+    status: "analyzed",
+    audit: record.releasedPreview,
+  }));
+  console.info(JSON.stringify({ event: "preview_released", caseId: record.caseId, reviewer: input.reviewer }));
+  return NextResponse.json({ status: "released", caseId: record.caseId });
+}

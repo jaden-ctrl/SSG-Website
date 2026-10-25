@@ -21,14 +21,12 @@ function previewEnv() {
     HUBSPOT_PORTAL_ID: '246622244',
     OPENAI_API_KEY: OPENAI,
     RESEND_API_KEY: 're_prod_SHOULD-NOT-LEAK',
-    NOTIFY_EMAIL_TO: 'jaden@shipleysolutionsgroup.com',
+    NOTIFY_EMAIL_TO: 'leads@shipleysolutionsgroup.com',
     NOTIFY_EMAIL_FROM: 'SSG Leads <leads@example.com>',
     LEAD_AUTOMATION_ENABLED: 'true',
     LEAD_WEBHOOK_URL: 'https://webhook.qa.invalid/lead',
     LEAD_WEBHOOK_AUTHORIZED: 'true',
     LEAD_WEBHOOK_SECRET: 'w'.repeat(40),
-    SSGAI_LEAD_WEBHOOK_URL: 'https://webhook.qa.invalid/ssgai',
-    SSGAI_LEAD_WEBHOOK_SECRET: 's'.repeat(20),
     SSGAI_REVIEW_TOKEN: 'review-token',
   };
 }

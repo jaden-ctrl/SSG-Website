@@ -33,26 +33,6 @@ class StoreLeadAction implements LeadAction {
   }
 }
 
-class WebhookLeadAction implements LeadAction {
-  url: string;
-  constructor(url: string) { this.url = url; }
-  async save(record: LeadRecord) {
-    const headers: Record<string, string> = { "content-type": "application/json" };
-    if (process.env.SSGAI_LEAD_WEBHOOK_SECRET) headers.authorization = `Bearer ${process.env.SSGAI_LEAD_WEBHOOK_SECRET}`;
-    const response = await outboundFetch({
-      channel: "webhook",
-      policy: "legacy-ssgai",
-      url: this.url,
-      method: "POST",
-      headers,
-      body: JSON.stringify(record),
-      timeoutMs: 8000,
-    });
-    if (response.headers.get("X-SSG-Outbound") === "mock") return;
-    if (!response.ok) throw new Error(`Lead webhook failed (${response.status})`);
-  }
-}
-
 async function syncHubSpot(record: LeadRecord) {
   if (!process.env.HUBSPOT_ACCESS_TOKEN && !process.env.HUBSPOT_TEST_ACCESS_TOKEN) return;
   const properties = {
@@ -81,12 +61,9 @@ export async function captureLead(record: LeadRecord) {
 }
 
 export async function projectReleasedLead(record: LeadRecord) {
-  const optional = [syncHubSpot(record), ...(process.env.SSGAI_LEAD_WEBHOOK_URL ? [new WebhookLeadAction(process.env.SSGAI_LEAD_WEBHOOK_URL).save(record)] : [])];
-  const results = await Promise.allSettled(optional);
-  results.forEach((result) => {
-    if (result.status === "rejected") {
-      const reason = result.reason;
-      console.error(JSON.stringify({ event: "lead_sync_failed", leadId: record.id, name: reason instanceof Error ? reason.name : "unknown" }));
-    }
-  });
+  try {
+    await syncHubSpot(record);
+  } catch (error) {
+    console.error(JSON.stringify({ event: "lead_sync_failed", leadId: record.id, name: error instanceof Error ? error.name : "unknown" }));
+  }
 }

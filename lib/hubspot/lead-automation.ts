@@ -11,8 +11,8 @@
  * - No secrets are ever logged.
  */
 
-import { outboundFetch } from '@/lib/gateway';
-import { currentDecision } from '@/lib/runtime-mode';
+import { outboundFetch } from '../gateway';
+import { currentDecision } from '../runtime-mode';
 
 const STEP_TIMEOUT_MS = 4_000;
 
@@ -117,14 +117,21 @@ function excludedDomains(): Set<string> {
   );
 }
 
-/** Business domain from website first, then email; null for free-mail / shared hosts / excluded domains. */
+/**
+ * Company domain comes from the email, then a typed website only when the mailbox
+ * is not free or consumer mail. Gmail, Yahoo, Outlook, iCloud, AOL, Proton, and
+ * the rest of FREE_MAIL_DOMAINS never attach the company behind a typed website.
+ * The website stays on the contact either way.
+ */
 export function businessDomain(website: unknown, email: string): string | null {
   const excluded = excludedDomains();
-  const candidates = [hostnameOf(text(website)), email.split('@')[1]?.toLowerCase() || ''];
+  const emailDomain = email.split('@')[1]?.toLowerCase() || '';
+  if (emailDomain && isFreeMail(emailDomain)) return null;
+  const candidates = [emailDomain, hostnameOf(text(website))];
   for (const domain of candidates) {
     if (!domain || !domain.includes('.')) continue;
     if (isFreeMail(domain) || excluded.has(domain)) continue;
-    if (SHARED_HOST_SUFFIXES.some((s) => domain === s || domain.endsWith(`.${s}`))) continue;
+    if (SHARED_HOST_SUFFIXES.some((suffix) => domain === suffix || domain.endsWith(`.${suffix}`))) continue;
     return domain;
   }
   return null;
@@ -176,33 +183,6 @@ export async function assignOwner(ctx: AutomationContext): Promise<string> {
   return 'assigned';
 }
 
-function dedupeWindowDays() {
-  const n = Number(process.env.LEAD_TASK_DEDUPE_DAYS || 7);
-  return Number.isFinite(n) && n > 0 && n <= 90 ? n : 7;
-}
-
-/** Returns an existing open follow-up task id for this contact inside the dedupe window, if any. */
-export async function findOpenFollowUpTask(ctx: AutomationContext): Promise<string | null> {
-  const since = Date.now() - dedupeWindowDays() * 24 * 60 * 60 * 1000;
-  const data = await hs( '/crm/v3/objects/tasks/search', {
-    method: 'POST',
-    body: JSON.stringify({
-      filterGroups: [{
-        filters: [
-          { propertyName: 'associations.contact', operator: 'EQ', value: ctx.contactId },
-          { propertyName: 'hs_task_status', operator: 'NEQ', value: 'COMPLETED' },
-          { propertyName: 'hs_createdate', operator: 'GTE', value: String(since) },
-        ],
-      }],
-      properties: ['hs_task_subject', 'hs_task_status'],
-      limit: 20,
-    }),
-  });
-  const match = (data?.results || []).find((t: { properties?: { hs_task_subject?: string } }) =>
-    (t.properties?.hs_task_subject || '').startsWith(TASK_SUBJECT_PREFIX));
-  return match?.id ?? null;
-}
-
 function variantLabel(body: LeadPayload) {
   const variant = text(body.form_variant);
   if (variant === 'website_review') return 'Free website review';
@@ -214,10 +194,8 @@ function displayName(body: LeadPayload, email: string) {
   return [text(body.first_name), text(body.last_name)].filter(Boolean).join(' ') || email;
 }
 
-/** 2. Create exactly one open follow-up task per contact per dedupe window. */
+/** Legacy helper. /api/lead dedupes in lib/lead/tasks.ts and does not call this. */
 export async function ensureFollowUpTask(ctx: AutomationContext): Promise<{ status: string; taskId?: string }> {
-  const existing = await findOpenFollowUpTask(ctx);
-  if (existing) return { status: 'skipped:duplicate', taskId: existing };
   const owner = ownerId();
   const dueHours = Number(process.env.LEAD_TASK_DUE_HOURS || 24);
   const company = text(ctx.body.company);

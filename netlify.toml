@@ -1,0 +1,8 @@
+# Netlify reads this during the build. `npm run build` bakes SSG_BUILD_CONTEXT
+# from CONTEXT. Skipping that command leaves the committed non-production value
+# and production would refuse live HubSpot calls.
+[build]
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "22"

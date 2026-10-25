@@ -1,0 +1,9 @@
+* @jaden-ctrl
+/lib/gateway.ts @jaden-ctrl
+/lib/runtime-mode.ts @jaden-ctrl
+/app/api/ @jaden-ctrl
+/scripts/ @jaden-ctrl
+/package.json @jaden-ctrl
+/package-lock.json @jaden-ctrl
+/netlify.toml @jaden-ctrl
+/.github/ @jaden-ctrl

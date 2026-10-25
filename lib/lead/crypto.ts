@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
-import type { CipherPayload } from "@/lib/lead/types";
+import type { CipherPayload } from "./types";
 
 export function decodeStoreKey(keyB64: string | undefined): Buffer | null {
   if (!keyB64) return null;

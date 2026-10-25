@@ -1,4 +1,4 @@
-import { LiveTestBlockedError, outboundFetch } from "@/lib/gateway";
+import { LiveTestBlockedError, outboundFetch } from "../gateway";
 
 export type CrmResult = { status: number; data: unknown; networkError?: boolean };
 
