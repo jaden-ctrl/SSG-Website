@@ -74,7 +74,7 @@ export function timelineLabel(raw: unknown): string {
   if (!value) return 'Not provided';
   if (TIMELINE_LABELS[value]) return TIMELINE_LABELS[value];
   const legacy = Object.values(TIMELINE_LABELS).find((label) => label === value || label.replace('–', '-') === value);
-  return legacy || value.slice(0, 100);
+  return legacy || `Other: ${value.replace(/[\r\n]+/g, ' ').slice(0, 60)}`;
 }
 
 /* ---------------------------------------------------------------- spam */
@@ -128,16 +128,28 @@ export function businessDomain(website: unknown, email: string): string | null {
 
 /* ---------------------------------------------------------------- HubSpot */
 
-async function hs(token: string, path: string, init: RequestInit = {}) {
-  const response = await fetch(`${HUBSPOT_BASE}${path}`, {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function hs(token: string, path: string, init: RequestInit = {}, attempt = 0): Promise<any> {
+  let response: Response;
+  try {
+    response = await fetch(`${HUBSPOT_BASE}${path}`, {
     ...init,
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(init.headers || {}) },
     cache: 'no-store',
     signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
   });
+  } catch (error) {
+    if (attempt < 1) return hs(token, path, init, attempt + 1); // one retry on network error/timeout
+    throw error;
+  }
+  if ((response.status === 429 || response.status >= 500) && attempt < 1) {
+    await new Promise((r) => setTimeout(r, 500));
+    return hs(token, path, init, attempt + 1);
+  }
   if (!response.ok) {
-    const detail = (await response.text()).slice(0, 300);
-    throw new Error(`HubSpot ${init.method || 'GET'} ${path.split('?')[0]} -> ${response.status}: ${detail}`);
+    // PII-safe: log category/correlationId only, never the response message (it can echo submitted values).
+    const data = await response.json().catch(() => null);
+    throw new Error(`HubSpot ${init.method || 'GET'} ${path.split('?')[0].replace(/\d+/g, ':id')} -> ${response.status} ${data?.category || ''} ${data?.correlationId || ''}`.trim());
   }
   return response.status === 204 ? null : response.json();
 }

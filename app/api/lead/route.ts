@@ -1,7 +1,10 @@
+import { createHmac } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { automationEnabled, runLeadAutomationWithBudget, timelineLabel } from '@/lib/hubspot/lead-automation';
 
 const HUBSPOT_BASE = 'https://api.hubapi.com';
+const HUBSPOT_TIMEOUT_MS = 8_000;
+const WEBHOOK_TIMEOUT_MS = 3_000;
 
 type LeadPayload = Record<string, unknown> & {
   email?: string;
@@ -48,6 +51,7 @@ function buildHubSpotMessage(body: LeadPayload) {
       `Target timeline: ${timelineLabel(body.timeline)}`,
       `Estimated investment: ${text(body.budget) || 'Not provided'}`,
       `Desired outcome: ${text(body.message) || 'Not provided'}`,
+      `Contact permission for this request: ${text(body.consent) === 'true' ? 'Granted' : 'Not provided'}`,
     );
   }
 
@@ -75,7 +79,37 @@ async function hubspotFetch(path: string, token: string, init: RequestInit) {
       ...(init.headers || {}),
     },
     cache: 'no-store',
+    signal: AbortSignal.timeout(HUBSPOT_TIMEOUT_MS),
   });
+}
+
+/** PII-safe summary of a HubSpot error response: status, category and correlationId only. */
+async function hubspotErrorSummary(response: Response) {
+  try {
+    const data = await response.json();
+    return { status: response.status, category: data?.category, correlationId: data?.correlationId };
+  } catch {
+    return { status: response.status };
+  }
+}
+
+/** HubSpot 409 on create returns "Contact already exists. Existing ID: 123". */
+function existingIdFromConflict(message: unknown) {
+  const match = typeof message === 'string' ? message.match(/Existing ID:\s*(\d+)/i) : null;
+  return match?.[1];
+}
+
+function webhookPayload(body: LeadPayload, contactId: unknown, action: string) {
+  const submittedAt = new Date().toISOString();
+  if (process.env.LEAD_WEBHOOK_MINIMAL !== 'true') {
+    // Default keeps the existing payload shape so any current receiver keeps working.
+    return { ...body, submitted_at: submittedAt, hubspot_contact_id: contactId, hubspot_action: action };
+  }
+  return {
+    email: text(body.email), first_name: text(body.first_name), last_name: text(body.last_name),
+    company: text(body.company), website: text(body.website), form_variant: text(body.form_variant),
+    source: text(body.source), submitted_at: submittedAt, hubspot_contact_id: contactId, hubspot_action: action,
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -99,6 +133,11 @@ export async function POST(req: NextRequest) {
 
   if (text(body.faxNumber)) {
     return NextResponse.json({ ok: false, error: 'Please check the form.' }, { status: 400 });
+  }
+
+  // The form requires the consent checkbox for every variant; enforce and record it server-side too.
+  if (text(body.consent) !== 'true') {
+    return NextResponse.json({ ok: false, error: 'Please confirm we may contact you about this request.' }, { status: 400 });
   }
 
   if (text(body.form_variant) === 'website_review') {
@@ -158,8 +197,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!search.ok) {
-      const detail = await search.text();
-      console.error('HubSpot contact search failed:', search.status, detail);
+      console.error('HubSpot contact search failed:', JSON.stringify(await hubspotErrorSummary(search)));
       return NextResponse.json({ ok: false, error: 'CRM search failed' }, { status: 502 });
     }
 
@@ -182,11 +220,22 @@ export async function POST(req: NextRequest) {
         method: 'POST',
         body: JSON.stringify({ properties }),
       });
+      // Fast resubmit race: search index lagged and the contact already exists -> update it instead.
+      if (hubspotResponse.status === 409) {
+        const conflict = await hubspotResponse.json().catch(() => null);
+        const conflictId = existingIdFromConflict(conflict?.message);
+        if (conflictId) {
+          action = 'updated';
+          hubspotResponse = await hubspotFetch(`/crm/v3/objects/contacts/${conflictId}`, token, {
+            method: 'PATCH',
+            body: JSON.stringify({ properties }),
+          });
+        }
+      }
     }
 
     if (!hubspotResponse.ok) {
-      const detail = await hubspotResponse.text();
-      console.error('HubSpot contact write failed:', hubspotResponse.status, detail);
+      console.error('HubSpot contact write failed:', JSON.stringify(await hubspotErrorSummary(hubspotResponse)));
       return NextResponse.json({ ok: false, error: 'CRM rejected lead' }, { status: 502 });
     }
 
@@ -207,32 +256,30 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const webhook = process.env.LEAD_WEBHOOK_URL;
+    const webhook = process.env.LEAD_WEBHOOK_URL?.trim();
     if (webhook) {
       try {
+        const payload = JSON.stringify(webhookPayload(body, hubspotData?.id, action));
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        const secret = process.env.LEAD_WEBHOOK_SECRET;
+        if (secret) headers['X-SSG-Signature'] = createHmac('sha256', secret).update(payload).digest('hex');
         const webhookResponse = await fetch(webhook, {
-          signal: AbortSignal.timeout(5_000),
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...body,
-            submitted_at: new Date().toISOString(),
-            hubspot_contact_id: hubspotData?.id,
-            hubspot_action: action,
-          }),
+          headers,
+          body: payload,
           cache: 'no-store',
+          signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
         });
-        if (!webhookResponse.ok) {
-          console.warn('Optional lead webhook failed:', webhookResponse.status);
-        }
+        if (!webhookResponse.ok) console.warn('Optional lead webhook failed:', webhookResponse.status);
       } catch (error) {
-        console.warn('Optional lead webhook error:', error instanceof Error ? error.message : 'unknown');
+        // An optional webhook must never turn a successful HubSpot write into a failed submission.
+        console.warn('Optional lead webhook error:', error instanceof Error ? error.name : 'unknown');
       }
     }
 
     return NextResponse.json({ ok: true, action, contactId: hubspotData?.id });
   } catch (error) {
-    console.error('Lead submission error:', error);
+    console.error('Lead submission error:', error instanceof Error ? error.name : 'unknown');
     return NextResponse.json({ ok: false, error: 'Lead submission failed' }, { status: 502 });
   }
 }
