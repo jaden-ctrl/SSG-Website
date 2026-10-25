@@ -12,8 +12,10 @@ import { SSG_BUILD_CONTEXT } from "./build-context.generated";
  * Live production calls require both:
  * 1. The build-baked context is exactly "production" (scripts/write-build-context.mjs).
  * 2. The request Host header, or the site URL host when there is no request,
- *    is on LEAD_PRODUCTION_HOSTS (default: the SSG apex and www host).
- *    X-Forwarded-Host is used only when it matches Host.
+ *    is on LEAD_PRODUCTION_HOSTS (default: the SSG apex, www, and
+ *    ssg-site.netlify.app). X-Forwarded-Host is used only when it matches Host.
+ *    Mock and live-test never run on those hosts, even if the allowlist is
+ *    missing or unparseable. LEAD_LIVE_TEST on a production host fails closed.
  *
  * A runtime CONTEXT value, when present, can only force mock. It cannot
  * promote a preview build to live. A production credential never enables live
@@ -23,11 +25,15 @@ import { SSG_BUILD_CONTEXT } from "./build-context.generated";
 
 export const PRODUCTION_HUBSPOT_PORTAL_ID = "246622244";
 
-const DEFAULT_PRODUCTION_HOSTS = ["shipleysolutionsgroup.com", "www.shipleysolutionsgroup.com"];
+export const DEFAULT_PRODUCTION_HOSTS = [
+  "shipleysolutionsgroup.com",
+  "www.shipleysolutionsgroup.com",
+  "ssg-site.netlify.app",
+];
 
 export type RuntimeMode = "mock" | "live" | "live-test";
 
-export type ModeBlock = "production_portal";
+export type ModeBlock = "production_portal" | "live_test_on_prod_host";
 
 export type ModeDecision = {
   mode: RuntimeMode;
@@ -86,6 +92,23 @@ export function productionHosts(env: Env): { hosts: string[]; unparseable: boole
   return { hosts, unparseable: false };
 }
 
+/**
+ * Hosts that must never run mock or live-test. A broken LEAD_PRODUCTION_HOSTS
+ * value cannot remove the built-in production hosts from this set.
+ */
+export function productionScopeHosts(env: Env): string[] {
+  const { hosts, unparseable } = productionHosts(env);
+  const scope = new Set<string>(DEFAULT_PRODUCTION_HOSTS);
+  if (!unparseable) for (const host of hosts) scope.add(host);
+  return [...scope];
+}
+
+export function hostInProductionScope(host: string | null | undefined, env: Env): boolean {
+  const normalized = normalizeHost(host);
+  if (!normalized) return false;
+  return productionScopeHosts(env).includes(normalized);
+}
+
 export function runWithRequestHost<T>(host: string | null, fn: () => T): T {
   return hostStore.run(host, fn);
 }
@@ -120,15 +143,19 @@ export function decideRuntimeMode(input: {
   const { hosts, unparseable } = productionHosts(env);
   const hostAllowed = Boolean(host && !unparseable && hosts.includes(host));
   const runtimeAllowsProduction = runtime == null || runtime === "" || runtime === "production";
+  const liveTest = env.LEAD_LIVE_TEST;
+
+  // The flag must never select live-test on a production host, including a
+  // production bake on ssg-site.netlify.app and a non-production bake on the apex.
+  if (liveTest === "true" && hostInProductionScope(host, env)) {
+    return { mode: "mock", block: "live_test_on_prod_host" };
+  }
 
   // Production capture stays live only for a production build on an allowlisted
   // host. A non-production runtime CONTEXT, when one is actually present, cannot
   // be promoted and instead forces the request off the production path.
   if (buildIsProduction && hostAllowed && runtimeAllowsProduction) return { mode: "live", block: null };
 
-  // Explicit opt-in is the only other way out of mock. It is checked after the
-  // production decision so a production deploy ignores the flag.
-  const liveTest = env.LEAD_LIVE_TEST;
   if (liveTest != null && liveTest !== "" && liveTest !== "true" && liveTest !== "false") {
     return { mode: "mock", block: null };
   }

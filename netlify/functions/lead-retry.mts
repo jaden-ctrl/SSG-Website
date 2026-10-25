@@ -15,7 +15,11 @@ export const config = { schedule: "*/10 * * * *" };
 
 export default async function leadRetry() {
   const decision = currentDecision();
-  if (decision.mode === "mock" || decision.block) return;
+  if (decision.mode === "mock" || decision.block) {
+    const code = decision.block === "live_test_on_prod_host" ? "lead_live_test_on_prod_host" : "lead_retry_skipped";
+    console.error(JSON.stringify({ event: "lead_retry_skipped", code, mode: decision.block ? "blocked" : decision.mode }));
+    return;
+  }
   await runDue({
     store: openJsonStore("lead-intake", { strong: true }),
     crm: createLiveCrm(),

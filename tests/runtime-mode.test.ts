@@ -59,13 +59,32 @@ test('an unparseable host list or live-test flag fails closed to mock', () => {
   assert.equal(badFlag.mode, 'mock');
 });
 
-test('production build wins over LEAD_LIVE_TEST so the production token is not swapped', () => {
-  const decision = decideRuntimeMode({
-    buildContext: 'production',
-    host: productionHost,
+test('LEAD_LIVE_TEST on a production host fails closed and does not swap in the test token', () => {
+  const apex = decideRuntimeMode({
+    buildContext: 'non-production',
+    host: 'shipleysolutionsgroup.com',
     env: { LEAD_LIVE_TEST: 'true', HUBSPOT_TEST_ACCESS_TOKEN: 'test-token', HUBSPOT_TEST_PORTAL_ID: '999' },
   });
+  assert.equal(apex.mode, 'mock');
+  assert.equal(apex.block, 'live_test_on_prod_host');
+
+  const netlify = decideRuntimeMode({
+    buildContext: 'production',
+    host: 'ssg-site.netlify.app',
+    env: { LEAD_LIVE_TEST: 'true', HUBSPOT_TEST_ACCESS_TOKEN: 'test-token', HUBSPOT_TEST_PORTAL_ID: '999' },
+  });
+  assert.equal(netlify.mode, 'mock');
+  assert.equal(netlify.block, 'live_test_on_prod_host');
+});
+
+test('ssg-site.netlify.app is a production host for a production bake', () => {
+  const decision = decideRuntimeMode({
+    buildContext: 'production',
+    host: 'ssg-site.netlify.app',
+    env: {},
+  });
   assert.equal(decision.mode, 'live');
+  assert.equal(decision.block, null);
 });
 
 test('live test requires test credentials and hard-fails the production portal', () => {

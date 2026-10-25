@@ -20,7 +20,6 @@ export type OutboundInput = {
   recipients?: string[];
   idempotencyKey?: string;
   policy?: "lead";
-  purpose?: "portal-check";
 };
 
 const HOSTS = {
@@ -34,7 +33,7 @@ export const resendOrigin = `https://${HOSTS.resend}`;
 export const openaiOrigin = `https://${HOSTS.openai}`;
 export const HUBSPOT_ACCOUNT_INFO_PATH = "/account-info/v3/details";
 
-export type LiveTestBlockCode = "production_portal" | "portal_unverified";
+export type LiveTestBlockCode = "production_portal" | "portal_unverified" | "production_mismatch";
 
 export class LiveTestBlockedError extends Error {
   readonly code: LiveTestBlockCode;
@@ -45,10 +44,41 @@ export class LiveTestBlockedError extends Error {
   }
 }
 
-const verifiedPortals = new Map<string, string>();
+export const PORTAL_CACHE_TTL_MS = 10 * 60 * 1000;
+
+type PortalCacheEntry = { portal: string; expiresAt: number };
+
+const verifiedPortals = new Map<string, PortalCacheEntry>();
+let portalNow = () => Date.now();
 
 export function resetLiveTestPortalCache() {
   verifiedPortals.clear();
+  portalNow = () => Date.now();
+}
+
+/** Tests advance this clock. A verified portal is trusted for PORTAL_CACHE_TTL_MS only. */
+export function setPortalCacheNow(now: () => number) {
+  portalNow = now;
+}
+
+function cachedPortal(key: string): string | null {
+  const entry = verifiedPortals.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt <= portalNow()) {
+    verifiedPortals.delete(key);
+    return null;
+  }
+  return entry.portal;
+}
+
+function rememberPortal(key: string, portal: string) {
+  verifiedPortals.set(key, { portal, expiresAt: portalNow() + PORTAL_CACHE_TTL_MS });
+}
+
+/** The account-info read is the only HubSpot call allowed before a portal proof. */
+export function isPortalProof(input: OutboundInput): boolean {
+  const method = (input.method || "GET").toUpperCase();
+  return method === "GET" && input.path === HUBSPOT_ACCOUNT_INFO_PATH && !input.body;
 }
 
 function portalIdOf(data: unknown): string | null {
@@ -74,20 +104,45 @@ export async function assertLiveTestPortal(decision: ModeDecision, env: Env = pr
   if (!declared || !token || declaredProduction || sameAsProduction) {
     throw new LiveTestBlockedError(declaredProduction || sameAsProduction ? "production_portal" : "portal_unverified");
   }
-  const cacheKey = `${token}\n${declared}`;
-  const cached = verifiedPortals.get(cacheKey);
+  const cacheKey = `live-test\n${token}\n${declared}`;
+  const cached = cachedPortal(cacheKey);
   if (cached) {
     if (cached === PRODUCTION_HUBSPOT_PORTAL_ID) throw new LiveTestBlockedError("production_portal");
     if (cached !== declared) throw new LiveTestBlockedError("portal_unverified");
     return;
   }
+  const portal = await readAccountPortal(decision, env);
+  if (portal === PRODUCTION_HUBSPOT_PORTAL_ID) throw new LiveTestBlockedError("production_portal");
+  if (portal !== declared) throw new LiveTestBlockedError("portal_unverified");
+  rememberPortal(cacheKey, portal);
+}
+
+/**
+ * Live production writes must prove the production token belongs to portal
+ * 246622244. A mismatch or an unreadable account-info response blocks the write.
+ * Failures are not cached.
+ */
+export async function assertProductionPortal(decision: ModeDecision, env: Env = process.env): Promise<void> {
+  const token = (env.HUBSPOT_ACCESS_TOKEN || "").trim();
+  if (!token) throw new LiveTestBlockedError("portal_unverified");
+  const cacheKey = `live\n${token}\n${PRODUCTION_HUBSPOT_PORTAL_ID}`;
+  const cached = cachedPortal(cacheKey);
+  if (cached) {
+    if (cached !== PRODUCTION_HUBSPOT_PORTAL_ID) throw new LiveTestBlockedError("production_mismatch");
+    return;
+  }
+  const portal = await readAccountPortal(decision, env);
+  if (portal !== PRODUCTION_HUBSPOT_PORTAL_ID) throw new LiveTestBlockedError("production_mismatch");
+  rememberPortal(cacheKey, portal);
+}
+
+async function readAccountPortal(decision: ModeDecision, env: Env): Promise<string> {
   let response: Response;
   try {
     response = await dispatchOutbound({
       channel: "hubspot",
       path: HUBSPOT_ACCOUNT_INFO_PATH,
       method: "GET",
-      purpose: "portal-check",
     }, decision, env);
   } catch (error) {
     if (error instanceof LiveTestBlockedError) throw error;
@@ -96,9 +151,7 @@ export async function assertLiveTestPortal(decision: ModeDecision, env: Env = pr
   if (!response.ok || response.headers.get("X-SSG-Outbound") === "mock") throw new LiveTestBlockedError("portal_unverified");
   const portal = portalIdOf(await response.json().catch(() => null));
   if (!portal) throw new LiveTestBlockedError("portal_unverified");
-  if (portal === PRODUCTION_HUBSPOT_PORTAL_ID) throw new LiveTestBlockedError("production_portal");
-  if (portal !== declared) throw new LiveTestBlockedError("portal_unverified");
-  verifiedPortals.set(cacheKey, portal);
+  return portal;
 }
 
 export function paidAiAllowed(decision: ModeDecision): boolean {
@@ -164,9 +217,9 @@ function logOutbound(event: string, channel: OutboundChannel, mode: string) {
 }
 
 export async function dispatchOutbound(input: OutboundInput, decision: ModeDecision, env: Env = process.env): Promise<Response> {
-  if (decision.block === "production_portal") {
+  if (decision.block) {
     logOutbound("outbound_blocked", input.channel, "blocked");
-    throw new LiveTestBlockedError();
+    throw new LiveTestBlockedError(decision.block === "production_portal" ? "production_portal" : "portal_unverified");
   }
 
   if (decision.mode === "mock") {
@@ -223,12 +276,16 @@ export async function dispatchOutbound(input: OutboundInput, decision: ModeDecis
       logOutbound("outbound_blocked", "hubspot", "live-test");
       throw new LiveTestBlockedError();
     }
-    if (decision.mode === "live-test" && input.purpose !== "portal-check") {
+    if (!isPortalProof(input)) {
       try {
-        await assertLiveTestPortal(decision, env);
+        if (decision.mode === "live") await assertProductionPortal(decision, env);
+        if (decision.mode === "live-test") await assertLiveTestPortal(decision, env);
       } catch (error) {
         if (error instanceof LiveTestBlockedError) {
-          console.error(JSON.stringify({ event: "lead_live_test_blocked", reason: error.code }));
+          console.error(JSON.stringify({
+            event: decision.mode === "live" ? "lead_production_portal_blocked" : "lead_live_test_blocked",
+            reason: error.code,
+          }));
         }
         throw error;
       }
@@ -247,9 +304,10 @@ export async function dispatchOutbound(input: OutboundInput, decision: ModeDecis
   }
 
   if (input.channel === "openai") {
-    const key = env.OPENAI_API_KEY;
+    // The Agents SDK was removed. Any future live call still has to present a key here.
+    const key = (env.OPENAI_API_KEY || "").trim();
     if (!key || decision.mode !== "live") {
-      logOutbound("outbound_mocked", "openai", decision.mode);
+      logOutbound("outbound_mocked", "openai", key ? decision.mode : "missing_key");
       return mockResponse(input);
     }
     headers.set("authorization", `Bearer ${key}`);
@@ -266,8 +324,8 @@ export async function dispatchOutbound(input: OutboundInput, decision: ModeDecis
   });
 }
 
-export async function outboundFetch(input: OutboundInput): Promise<Response> {
-  return dispatchOutbound(input, currentDecision(), process.env);
+export async function outboundFetch(input: OutboundInput, decision = currentDecision(), env: Env = process.env): Promise<Response> {
+  return dispatchOutbound(input, decision, env);
 }
 
 export type SmtpMessage = {

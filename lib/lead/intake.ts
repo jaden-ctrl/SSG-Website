@@ -8,6 +8,7 @@ import { decodeStoreKey, encryptJson, hmacHex } from "@/lib/lead/crypto";
 import { logLead } from "@/lib/lead/log";
 import type { Mailer } from "@/lib/lead/notify";
 import { createMailer } from "@/lib/lead/notify";
+import { alertOps } from "@/lib/lead/ops-alert";
 import { processSubmission, runDue, type ProcessDeps } from "@/lib/lead/processor";
 import { clientIp, enforceRateLimit } from "@/lib/lead/ratelimit";
 import { submissionKey } from "@/lib/lead/subkey";
@@ -48,8 +49,18 @@ function received(): IntakeResult {
   return { status: 200, body: { ok: true, status: "received" } };
 }
 
-function failed(): IntakeResult {
-  return { status: 502, body: { ok: false, error: "Lead submission failed" } };
+function queued(): IntakeResult {
+  return { status: 200, body: { ok: true, status: "queued" } };
+}
+
+function failure(status: number, code: string, error: string): IntakeResult {
+  return { status, body: { ok: false, code, error } };
+}
+
+/** 2xx only when the contact was verified or the site store still holds sub and queue. */
+function durableSuccess(record: SubmissionRecord | null, durable: boolean): boolean {
+  if (record?.steps.contact.status === "done") return true;
+  return durable && !!record && (record.state === "queued" || record.state === "retry_scheduled" || record.state === "processing");
 }
 
 /**
@@ -62,15 +73,15 @@ export async function acceptLead(raw: string, contentLength: string | null, head
   const now = options.now ?? (() => Date.now());
   const decision = options.decision ?? currentDecision(env);
   if (decision.mode === "live" && !env.HUBSPOT_ACCESS_TOKEN) {
-    return { status: 503, body: { ok: false, error: "Lead system is not configured yet." } };
+    return failure(503, "lead_hubspot_unconfigured", "Lead system is not configured yet.");
   }
-  if (bodyTooLarge(contentLength, raw)) return { status: 413, body: { ok: false, error: "Please check the form.", fields: [] } };
+  if (bodyTooLarge(contentLength, raw)) return failure(413, "lead_body_too_large", "Please check the form.");
 
   let parsed: unknown;
   try {
     parsed = raw ? JSON.parse(raw) : null;
   } catch {
-    return { status: 400, body: { ok: false, error: "Invalid request body", fields: [] } };
+    return failure(400, "lead_invalid_body", "Invalid request body");
   }
 
   const origins = productionHosts(env).hosts;
@@ -81,15 +92,23 @@ export async function acceptLead(raw: string, contentLength: string | null, head
     minFillMs: numberEnv(env, "LEAD_MIN_FILL_MS", 2_500),
     origins,
   });
-  if (!validation.ok) return { status: validation.status, body: { ok: false, error: validation.error, fields: validation.fields } };
+  if (!validation.ok) return { status: validation.status, body: { ok: false, code: "lead_invalid", error: validation.error, fields: validation.fields } };
   if (validation.stripped.length) logLead("info", "lead_unknown_fields_stripped", { fields: validation.stripped });
 
-  const durable = Boolean(decodeStoreKey(env.LEAD_STORE_KEY));
+  const configuredKey = (env.LEAD_STORE_KEY || "").trim();
+  const keyIsValid = Boolean(decodeStoreKey(configuredKey));
+  const durable = keyIsValid;
+  if (configuredKey && !keyIsValid) {
+    logLead("error", "lead_store_key_invalid", { code: "lead_store_key_invalid" });
+    await alertOps({ code: "lead_store_key_invalid", decision, env });
+  } else if (!configuredKey && decision.mode === "live") {
+    logLead("warn", "lead_store_unavailable", { code: "lead_store_unavailable" });
+  }
   const shared = options.store ?? openJsonStore("lead-intake", { strong: true });
   const recordKey = durable ? env.LEAD_STORE_KEY! : randomBytes(32).toString("base64");
   const recordStore = durable ? shared : privateJsonStore();
   const recordEnv = durable ? env : { ...env, LEAD_STORE_KEY: recordKey };
-  const crm = options.crm ?? createLiveCrm();
+  const crm = options.crm ?? createLiveCrm(decision, env);
   const mailer = options.mailer ?? createMailer(decision, env);
   const deps: ProcessDeps = {
     store: recordStore,
@@ -119,11 +138,7 @@ export async function acceptLead(raw: string, contentLength: string | null, head
 
   if (durable) {
     const existing = await shared.get(`sub/${subKey}`).catch(() => null) as SubmissionRecord | null;
-    if (existing) {
-      const due = (existing.state === "queued" || existing.state === "retry_scheduled") && existing.nextAttemptAt <= now();
-      if (due) await runPipeline(subKey, deps);
-      return received();
-    }
+    if (existing) return duplicateResult(existing, subKey, deps, now());
   }
 
   const limit = await enforceRateLimit({
@@ -138,8 +153,8 @@ export async function acceptLead(raw: string, contentLength: string | null, head
       global: numberEnv(env, "LEAD_RL_GLOBAL_PER_10M", 60),
     },
   });
-  if (limit.status === "limited") {
-    return { status: 429, body: { ok: false, error: "Please wait a moment and try again." }, retryAfter: limit.retryAfter };
+    if (limit.status === "limited") {
+    return { status: 429, body: { ok: false, code: "lead_rate_limited", error: "Please wait a moment and try again." }, retryAfter: limit.retryAfter };
   }
 
   const at = now();
@@ -164,28 +179,75 @@ export async function acceptLead(raw: string, contentLength: string | null, head
   if (durable) {
     try {
       const wrote = await shared.setJSON(`sub/${subKey}`, record, { onlyIfNew: true });
-      if (!wrote.modified) return received();
+      if (!wrote.modified) {
+        const winner = await shared.get(`sub/${subKey}`) as SubmissionRecord | null;
+        if (winner && durableSuccess(winner, true)) {
+          return { status: 200, body: { ok: true, status: "duplicate", code: "lead_duplicate" } };
+        }
+        return failure(502, "lead_duplicate", "Lead submission failed");
+      }
       await shared.setJSON(`queue/${subKey}`, { at: record.createdAt });
     } catch {
+      logLead("error", "lead_store_unavailable", { code: "lead_store_unavailable" });
+      await alertOps({ code: "lead_store_unavailable", decision, env, mailer });
       const fallback = privateJsonStore();
       await fallback.setJSON(`sub/${subKey}`, record);
       await fallback.setJSON(`queue/${subKey}`, { at: record.createdAt });
       const synced = await runPipeline(subKey, { ...deps, store: fallback });
-      return synced?.steps.contact.status === "done" ? received() : failed();
+      return nondurableOutcome(synced);
     }
   } else {
     await recordStore.setJSON(`sub/${subKey}`, record);
     await recordStore.setJSON(`queue/${subKey}`, { at: record.createdAt });
   }
 
-  const processed = await runPipeline(subKey, deps);
-  if (!durable && processed?.steps.contact.status !== "done") return failed();
+  let processed: SubmissionRecord | null = null;
+  try {
+    processed = await runPipeline(subKey, deps);
+  } catch (error) {
+    if (!(error instanceof LiveTestBlockedError)) throw error;
+    const mismatch = error.code === "production_mismatch" || error.code === "production_portal";
+    const code = mismatch ? "lead_portal_mismatch" : "lead_portal_unverified";
+    logLead("error", code, { code, submission_id: subKey.slice(0, 12) });
+    await alertOps({ code, decision, env, mailer });
+    if (mismatch) return failure(503, "lead_portal_mismatch", "Lead system is not configured yet.");
+    if (durable) return queued();
+    return failure(503, "lead_portal_unverified", "Lead system is not configured yet.");
+  }
+  if (decision.mode === "live") {
+    if (processed?.steps.contact.status === "done") return received();
+    if (durable && durableSuccess(processed, true)) return queued();
+    return failure(502, durable ? "lead_not_saved" : "lead_store_unavailable", "Lead submission failed");
+  }
+  if (!durable && processed?.steps.contact.status !== "done") return failure(502, "lead_not_saved", "Lead submission failed");
   if (durable && decision.mode !== "mock") {
     try {
       after(() => runDue(deps, { limit: 2, budgetMs: 5_000 }));
     } catch {
       // The scheduled function is the durable retry path when after() is unavailable.
     }
+  }
+  return received();
+}
+
+async function duplicateResult(existing: SubmissionRecord, subKey: string, deps: ProcessDeps, nowMs: number): Promise<IntakeResult> {
+  const due = (existing.state === "queued" || existing.state === "retry_scheduled") && existing.nextAttemptAt <= nowMs;
+  const current = due ? await runPipeline(subKey, deps) ?? existing : existing;
+  if (current.steps.contact.status === "done" || current.state === "queued" || current.state === "retry_scheduled" || current.state === "processing" || current.state === "completed") {
+    return { status: 200, body: { ok: true, status: "duplicate", code: "lead_duplicate" } };
+  }
+  return failure(502, "lead_duplicate", "Lead submission failed");
+}
+
+function nondurableOutcome(record: SubmissionRecord | null): IntakeResult {
+  if (record?.steps.contact.status !== "done") return failure(502, "lead_store_unavailable", "Lead submission failed");
+  const unfinished = (["owner", "company", "note", "task", "notify"] as const).some((step) => {
+    const status = record.steps[step]?.status;
+    return status === "pending" || status === "failed" || status === "unknown" || status === "deferred";
+  });
+  if (unfinished) {
+    logLead("error", "lead_partial_nondurable", { code: "lead_partial_nondurable" });
+    return failure(502, "lead_partial_nondurable", "Lead submission failed");
   }
   return received();
 }

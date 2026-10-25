@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useRef, useState } from 'react';
+import { leadFormResult } from './lead-form-status';
 
 type LeadFormProps = { source?: string; variant?: 'project' | 'website_review' };
 
@@ -35,15 +36,18 @@ export default function LeadForm({ source = 'website-quote-request', variant = '
           utm_source: params.get('utm_source') || '', utm_medium: params.get('utm_medium') || '',
           utm_campaign: params.get('utm_campaign') || '', landing_page: window.location.href }),
       });
-      const result = await response.json();
-      if (!response.ok || result.ok !== true) throw new Error('submission');
+      let parsed: { ok?: unknown } | null = null;
+      let parseError = false;
+      try { parsed = await response.json(); } catch { parseError = true; }
+      const outcome = leadFormResult({ httpOk: response.ok, parsed, parseError });
+      if (!outcome.succeeded) throw new Error('submission');
       form.reset(); setSucceeded(true);
       submissionId.current = crypto.randomUUID();
       startedAt.current = Date.now();
       setStatus(review ? 'Your website review request has been received. Jaden will review your site and follow up by email.' : 'Your quote request has been received. Jaden will follow up by email to clarify your requirements before preparing the proposal.');
     } catch (cause) {
       setFailed(true);
-      setStatus(cause instanceof Error && cause.message === 'website' ? 'Please enter a valid website address, such as yourbusiness.com.' : 'Your request could not be confirmed. Your answers are still here—please try again.');
+      setStatus(leadFormResult({ websiteError: cause instanceof Error && cause.message === 'website' }).status);
     } finally { setSending(false); }
   }
 

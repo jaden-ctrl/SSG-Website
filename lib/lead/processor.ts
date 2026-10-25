@@ -10,7 +10,7 @@ import { resolveOwner } from "./owners";
 import { createNote, ensureInquiryTask, TASK_SUBJECT_PREFIX } from "./tasks";
 import { emptySteps, type LeadInput, type StepName, type StepState, type StepStatus, type StoredLead, type SubmissionRecord } from "./types";
 import { buildWebhookBody, signWebhook, webhookGate } from "./webhook";
-import { outboundFetch } from "../gateway";
+import { LiveTestBlockedError, outboundFetch } from "../gateway";
 import type { ModeDecision } from "../runtime-mode";
 
 const BACKOFF_MS = [5 * 60_000, 15 * 60_000, 60 * 60_000, 4 * 60 * 60_000, 12 * 60 * 60_000];
@@ -72,7 +72,13 @@ export async function processSubmission(subKey: string, deps: ProcessDeps): Prom
   let record = await deps.store.get(`sub/${subKey}`) as SubmissionRecord | null;
   if (!record) throw new Error("missing_submission");
   if (record.state === "completed" || record.state === "dead_letter") return record;
-  const stored = decryptJson<StoredLead>(record.payload, key);
+  if (!record.payload?.iv || !record.payload?.tag || !record.payload?.data) throw new Error("lead_poison_record");
+  let stored: StoredLead;
+  try {
+    stored = decryptJson<StoredLead>(record.payload, key);
+  } catch {
+    throw new Error("lead_poison_record");
+  }
   const lead = stored.lead;
   const automation = deps.env.LEAD_AUTOMATION_ENABLED === "true";
   const links = spamReason({ ...lead, faxNumber: "" });
@@ -393,35 +399,123 @@ async function settle(deps: ProcessDeps, record: SubmissionRecord, subKey: strin
   return save(deps, subKey, (current) => ({ ...current, state: "retry_scheduled", attempts, nextAttemptAt: deps.now() + delay, lastErrorClass: "retryable" }));
 }
 
+function isPoison(error: unknown): boolean {
+  return error instanceof Error && (error.message === "lead_poison_record" || error.message === "missing_submission" || error.message === "store_key_invalid");
+}
+
+/** Dead-letter one bad record. Never throws, so the rest of the queue still runs. */
+async function quarantine(deps: ProcessDeps, subKey: string, code: string) {
+  logLead("error", code, { submission_id: subKey.slice(0, 12), code });
+  const at = new Date(deps.now()).toISOString();
+  await deps.store.setJSON(`dlq/${subKey}`, { reason: "poison", at, code }).catch(() => undefined);
+  await deps.store.delete(`queue/${subKey}`).catch(() => undefined);
+  try {
+    const record = await save(deps, subKey, (current) => ({ ...current, state: "dead_letter" }));
+    await alert(deps, record, "poison");
+  } catch {
+    logLead("error", "lead_dead_letter", { submission_id: subKey.slice(0, 12), code: "lead_poison_record" });
+  }
+}
+
+async function bumpFailure(deps: ProcessDeps, subKey: string): Promise<void> {
+  try {
+    const max = numberEnv(deps.env, "LEAD_MAX_ATTEMPTS", 6);
+    let dead = false;
+    const record = await save(deps, subKey, (current) => {
+      const attempts = current.attempts + 1;
+      if (attempts >= max) {
+        dead = true;
+        return { ...current, state: "dead_letter", attempts };
+      }
+      const delay = BACKOFF_MS[Math.min(attempts - 1, BACKOFF_MS.length - 1)];
+      return { ...current, state: "retry_scheduled", attempts, nextAttemptAt: deps.now() + delay, lastErrorClass: "retryable" };
+    });
+    if (!dead) {
+      logLead("error", "lead_retry_item_failed", { submission_id: subKey.slice(0, 12), code: "lead_retry_item_failed" });
+      return;
+    }
+    await deps.store.delete(`queue/${subKey}`);
+    await deps.store.setJSON(`dlq/${subKey}`, { reason: "attempts", at: new Date(deps.now()).toISOString(), code: "lead_dead_letter" });
+    await alert(deps, record, "attempts");
+  } catch {
+    await quarantine(deps, subKey, "lead_poison_record");
+  }
+}
+
 export async function runDue(deps: ProcessDeps, options?: { limit?: number; budgetMs?: number }): Promise<number> {
   const started = deps.now();
   const budget = options?.budgetMs ?? 22_000;
   const limit = options?.limit ?? 8;
-  const queued = await deps.store.list({ prefix: "queue/" });
-  const due: { key: string; at: number }[] = [];
-  const seen = new Set<string>();
-  const consider = (subKey: string, record: SubmissionRecord | null) => {
-    if (!record || seen.has(subKey)) return;
-    if (record.state === "completed" || record.state === "dead_letter") return;
-    if (record.nextAttemptAt > deps.now()) return;
-    seen.add(subKey);
-    due.push({ key: subKey, at: record.createdAt ? Date.parse(record.createdAt) : 0 });
-  };
-  for (const blob of queued.blobs) {
-    const subKey = blob.key.slice("queue/".length);
-    consider(subKey, await deps.store.get(`sub/${subKey}`) as SubmissionRecord | null);
-  }
-  const subs = await deps.store.list({ prefix: "sub/" });
-  for (const blob of subs.blobs) consider(blob.key.slice("sub/".length), await deps.store.get(blob.key) as SubmissionRecord | null);
-  due.sort((a, b) => a.at - b.at);
   let processed = 0;
-  for (const item of due) {
-    if (processed >= limit || deps.now() - started >= budget) break;
-    await processSubmission(item.key, deps);
-    processed += 1;
+  try {
+    const due = await collectDue(deps);
+    for (const item of due) {
+      if (processed >= limit || deps.now() - started >= budget) break;
+      try {
+        if (typeof item.nextAttemptAt !== "number" || !Number.isFinite(item.nextAttemptAt)) {
+          await quarantine(deps, item.key, "lead_poison_record");
+          continue;
+        }
+        await processSubmission(item.key, deps);
+        processed += 1;
+      } catch (error) {
+        if (error instanceof LiveTestBlockedError) {
+          const code = error.code === "production_mismatch" ? "lead_portal_mismatch" : error.code === "production_portal" ? "lead_live_test_blocked" : "lead_portal_unverified";
+          logLead("error", code, { submission_id: item.key.slice(0, 12), code });
+          continue;
+        }
+        if (isPoison(error)) {
+          await quarantine(deps, item.key, "lead_poison_record");
+          continue;
+        }
+        await bumpFailure(deps, item.key);
+      }
+    }
+  } finally {
+    try {
+      await housekeeping(deps);
+    } catch {
+      logLead("error", "lead_retry_item_failed", { code: "lead_housekeeping_failed" });
+    }
   }
-  await housekeeping(deps);
   return processed;
+}
+
+async function collectDue(deps: ProcessDeps): Promise<{ key: string; at: number; nextAttemptAt: number }[]> {
+  const due: { key: string; at: number; nextAttemptAt: number }[] = [];
+  const seen = new Set<string>();
+  const take = async (subKey: string) => {
+    if (!subKey || seen.has(subKey)) return;
+    seen.add(subKey);
+    try {
+      if (await deps.store.get(`dlq/${subKey}`)) return;
+      const record = await deps.store.get(`sub/${subKey}`) as SubmissionRecord | null;
+      if (!record || typeof record !== "object" || !record.state) {
+        await quarantine(deps, subKey, "lead_poison_record");
+        return;
+      }
+      if (record.state === "completed" || record.state === "dead_letter") return;
+      const next = record.nextAttemptAt;
+      if (typeof next === "number" && Number.isFinite(next) && next > deps.now()) return;
+      due.push({ key: subKey, at: record.createdAt ? Date.parse(record.createdAt) || 0 : 0, nextAttemptAt: next });
+    } catch {
+      await quarantine(deps, subKey, "lead_poison_record");
+    }
+  };
+  try {
+    const queued = await deps.store.list({ prefix: "queue/" });
+    for (const blob of queued.blobs) await take(blob.key.slice("queue/".length));
+  } catch {
+    logLead("error", "lead_retry_item_failed", { code: "lead_queue_list_failed" });
+  }
+  try {
+    const subs = await deps.store.list({ prefix: "sub/" });
+    for (const blob of subs.blobs) await take(blob.key.slice("sub/".length));
+  } catch {
+    logLead("error", "lead_retry_item_failed", { code: "lead_queue_list_failed" });
+  }
+  due.sort((a, b) => a.at - b.at);
+  return due;
 }
 
 async function housekeeping(deps: ProcessDeps) {
@@ -430,13 +524,17 @@ async function housekeeping(deps: ProcessDeps) {
   const dlqDays = numberEnv(deps.env, "LEAD_RETENTION_DLQ_DAYS", 30);
   const subs = await deps.store.list({ prefix: "sub/" });
   for (const blob of subs.blobs) {
-    const record = await deps.store.get(blob.key) as SubmissionRecord | null;
-    if (!record) continue;
-    const age = now - Date.parse(record.updatedAt || record.createdAt);
-    if (record.state === "completed" && age > doneDays * 86_400_000) await deps.store.delete(blob.key);
-    if (record.state === "dead_letter" && age > dlqDays * 86_400_000) {
-      await deps.store.delete(blob.key);
-      await deps.store.delete(`dlq/${record.subKey}`);
+    try {
+      const record = await deps.store.get(blob.key) as SubmissionRecord | null;
+      if (!record) continue;
+      const age = now - Date.parse(record.updatedAt || record.createdAt);
+      if (record.state === "completed" && age > doneDays * 86_400_000) await deps.store.delete(blob.key);
+      if (record.state === "dead_letter" && age > dlqDays * 86_400_000) {
+        await deps.store.delete(blob.key);
+        await deps.store.delete(`dlq/${record.subKey}`);
+      }
+    } catch {
+      logLead("error", "lead_retry_item_failed", { code: "lead_housekeeping_failed" });
     }
   }
   const spam = await deps.store.list({ prefix: "spam/" });

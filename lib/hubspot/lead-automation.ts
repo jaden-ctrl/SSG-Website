@@ -368,7 +368,7 @@ export async function runLeadAutomation(ctx: AutomationContext): Promise<Automat
     result.notify = notify;
     console.info(JSON.stringify({ event: 'lead_automation_done', contactId: id, ...result }));
   } catch (error) {
-    console.error(JSON.stringify({ event: 'lead_automation_failed', message: error instanceof Error ? error.message : 'unknown' }));
+    console.error(JSON.stringify({ event: 'lead_automation_failed', code: 'lead_automation_failed', errorClass: error instanceof Error ? error.name : 'unknown' }));
   }
   return result;
 }

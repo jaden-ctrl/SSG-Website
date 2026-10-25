@@ -1,18 +1,20 @@
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
-import { dispatchOutbound, HUBSPOT_ACCOUNT_INFO_PATH, hubspotOrigin, LiveTestBlockedError, resendOrigin, resetLiveTestPortalCache } from '@/lib/gateway';
+import { dispatchOutbound, HUBSPOT_ACCOUNT_INFO_PATH, hubspotOrigin, isPortalProof, LiveTestBlockedError, PORTAL_CACHE_TTL_MS, resendOrigin, resetLiveTestPortalCache, setPortalCacheNow } from '@/lib/gateway';
 import { PRODUCTION_HUBSPOT_PORTAL_ID } from '@/lib/runtime-mode';
 
 beforeEach(() => resetLiveTestPortalCache());
 
 const originalFetch = globalThis.fetch;
 
-test('live mode calls HubSpot with the production token', async () => {
-  const seen: { url: string; authorization: string }[] = [];
+test('live mode proves portal 246622244 before it calls HubSpot with the production token', async () => {
+  const seen: { url: string; authorization: string; method: string }[] = [];
   globalThis.fetch = async (input, init) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     const headers = new Headers(init?.headers);
-    seen.push({ url, authorization: headers.get('authorization') || '' });
+    const method = init?.method || 'GET';
+    seen.push({ url, authorization: headers.get('authorization') || '', method });
+    if (url.endsWith(HUBSPOT_ACCOUNT_INFO_PATH)) return Response.json({ portalId: Number(PRODUCTION_HUBSPOT_PORTAL_ID) });
     return Response.json({ id: '1', results: [] });
   };
   try {
@@ -26,9 +28,14 @@ test('live mode calls HubSpot with the production token', async () => {
       HUBSPOT_TEST_ACCESS_TOKEN: 'test-token',
     });
     assert.equal(response.ok, true);
-    assert.equal(seen.length, 1);
-    assert.equal(seen[0].url, `${hubspotOrigin}/crm/v3/objects/contacts`);
+    assert.equal(seen[0].url.endsWith(HUBSPOT_ACCOUNT_INFO_PATH), true);
+    assert.equal(seen[0].method, 'GET');
     assert.equal(seen[0].authorization, 'Bearer prod-token');
+    const writes = seen.filter((call) => !call.url.endsWith(HUBSPOT_ACCOUNT_INFO_PATH));
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0].url, `${hubspotOrigin}/crm/v3/objects/contacts`);
+    assert.equal(writes[0].authorization, 'Bearer prod-token');
+    assert.equal(writes[0].authorization.includes('test-token'), false);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -213,6 +220,117 @@ test('mock mode does not call fetch even when production credentials are present
     }, { mode: 'mock', block: null }, { HUBSPOT_ACCESS_TOKEN: 'prod-token', OPENAI_API_KEY: 'sk-test' });
     assert.equal(response.headers.get('X-SSG-Outbound'), 'mock');
     assert.equal(calls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('a caller cannot forge a portal proof with a purpose field', () => {
+  const forged = {
+    channel: 'hubspot' as const,
+    path: '/crm/v3/objects/contacts',
+    method: 'POST',
+    body: '{}',
+    purpose: 'portal-check',
+  };
+  assert.equal(isPortalProof(forged), false);
+  assert.equal(isPortalProof({ channel: 'hubspot', path: HUBSPOT_ACCOUNT_INFO_PATH, method: 'GET' }), true);
+  assert.equal(isPortalProof({ channel: 'hubspot', path: HUBSPOT_ACCOUNT_INFO_PATH, method: 'POST', body: '{}' }), false);
+});
+
+test('live mode blocks a portal mismatch, an unverifiable proof, and a network error before any write', async () => {
+  const cases: { name: string; respond: () => Promise<Response> | Response; code: string }[] = [
+    { name: 'wrong-portal', respond: () => Response.json({ portalId: 99999999 }), code: 'production_mismatch' },
+    { name: 'string-hub-id', respond: () => Response.json({ hub_id: '111' }), code: 'production_mismatch' },
+    { name: 'missing-id', respond: () => Response.json({ ok: true }), code: 'portal_unverified' },
+    { name: 'http-500', respond: () => Response.json({ portalId: Number(PRODUCTION_HUBSPOT_PORTAL_ID) }, { status: 500 }), code: 'portal_unverified' },
+    { name: 'network', respond: () => { throw new Error('down'); }, code: 'portal_unverified' },
+    { name: 'mock-header', respond: () => Response.json({ portalId: Number(PRODUCTION_HUBSPOT_PORTAL_ID) }, { headers: { 'X-SSG-Outbound': 'mock' } }), code: 'portal_unverified' },
+  ];
+  for (const item of cases) {
+    resetLiveTestPortalCache();
+    const writes: string[] = [];
+    globalThis.fetch = async (input, init) => {
+      const method = init?.method || 'GET';
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (method !== 'GET') writes.push(url);
+      return item.respond();
+    };
+    try {
+      await assert.rejects(
+        () => dispatchOutbound({
+          channel: 'hubspot',
+          path: '/crm/v3/objects/contacts',
+          method: 'POST',
+          body: '{}',
+        }, { mode: 'live', block: null }, { HUBSPOT_ACCESS_TOKEN: 'prod-token' }),
+        (error: unknown) => error instanceof LiveTestBlockedError && error.code === item.code,
+        item.name,
+      );
+      assert.deepEqual(writes, [], item.name);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  }
+});
+
+test('a numeric string portal id is accepted and the cache expires', async () => {
+  let now = 1_700_000_000_000;
+  let proofs = 0;
+  setPortalCacheNow(() => now);
+  globalThis.fetch = async (input) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    if (url.endsWith(HUBSPOT_ACCOUNT_INFO_PATH)) {
+      proofs += 1;
+      return Response.json({ portalId: PRODUCTION_HUBSPOT_PORTAL_ID });
+    }
+    return Response.json({ id: '1' });
+  };
+  try {
+    const env = { HUBSPOT_ACCESS_TOKEN: 'prod-token' };
+    const write = () => dispatchOutbound({
+      channel: 'hubspot',
+      path: '/crm/v3/objects/contacts',
+      method: 'POST',
+      body: '{}',
+    }, { mode: 'live', block: null }, env);
+    await write();
+    await write();
+    assert.equal(proofs, 1);
+    now += PORTAL_CACHE_TTL_MS + 1;
+    await write();
+    assert.equal(proofs, 2);
+    const swapped = { HUBSPOT_ACCESS_TOKEN: 'other-token' };
+    await dispatchOutbound({
+      channel: 'hubspot',
+      path: '/crm/v3/objects/contacts',
+      method: 'POST',
+      body: '{}',
+    }, { mode: 'live', block: null }, swapped);
+    assert.equal(proofs, 3);
+  } finally {
+    globalThis.fetch = originalFetch;
+    resetLiveTestPortalCache();
+  }
+});
+
+test('concurrent live writes both wait for a portal proof', async () => {
+  const order: string[] = [];
+  globalThis.fetch = async (input, init) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const method = init?.method || 'GET';
+    order.push(method);
+    if (url.endsWith(HUBSPOT_ACCOUNT_INFO_PATH)) return Response.json({ portalId: Number(PRODUCTION_HUBSPOT_PORTAL_ID) });
+    return Response.json({ id: '1' });
+  };
+  try {
+    await Promise.all([
+      dispatchOutbound({ channel: 'hubspot', path: '/crm/v3/objects/contacts', method: 'POST', body: '{}' }, { mode: 'live', block: null }, { HUBSPOT_ACCESS_TOKEN: 'prod-token' }),
+      dispatchOutbound({ channel: 'hubspot', path: '/crm/v3/objects/contacts', method: 'POST', body: '{}' }, { mode: 'live', block: null }, { HUBSPOT_ACCESS_TOKEN: 'prod-token' }),
+    ]);
+    const firstWrite = order.indexOf('POST');
+    assert.ok(order.slice(0, firstWrite).includes('GET'));
+    assert.equal(order.filter((method) => method === 'POST').length, 2);
   } finally {
     globalThis.fetch = originalFetch;
   }

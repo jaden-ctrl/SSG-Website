@@ -1,4 +1,5 @@
 import { LiveTestBlockedError, outboundFetch } from "../gateway";
+import { currentDecision, type Env, type ModeDecision } from "../runtime-mode";
 
 export type CrmResult = { status: number; data: unknown; networkError?: boolean };
 
@@ -181,7 +182,8 @@ export function createFailingCrm(mode: "down" | "timeout-once" | "commit-timeout
   };
 }
 
-export function createLiveCrm(): Crm {
+export function createLiveCrm(decision?: ModeDecision, env: Env = process.env): Crm {
+  const resolved = decision ?? currentDecision(env);
   return {
     async request(method, path, body, retry = "safe") {
       const send = async (): Promise<CrmResult> => {
@@ -192,7 +194,7 @@ export function createLiveCrm(): Crm {
             method,
             body: body === undefined ? undefined : JSON.stringify(body),
             timeoutMs: 8_000,
-          });
+          }, resolved, env);
           if (response.headers.get("X-SSG-Outbound") === "mock") {
             const data = await response.json().catch(() => null);
             return { status: response.status, data };

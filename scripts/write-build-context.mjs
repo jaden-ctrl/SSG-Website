@@ -4,9 +4,27 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const defaultFile = join(dirname(fileURLToPath(import.meta.url)), '..', 'lib', 'build-context.generated.ts');
 
+const RECOGNIZED_CONTEXTS = new Set(['production', 'deploy-preview', 'branch-deploy', 'dev']);
+
 /** Netlify CONTEXT is live only when it is exactly "production". */
 export function bakedContextValue(context) {
   return context === 'production' ? 'production' : 'non-production';
+}
+
+/**
+ * On Netlify, a missing or unrecognized CONTEXT must fail the build before
+ * anything is written. "Production" is not "production". deploy-preview,
+ * branch-deploy, and dev are recognized and bake non-production.
+ */
+export function netlifyContextProblem(env) {
+  if (env.NETLIFY !== 'true') return null;
+  const context = env.CONTEXT;
+  if (context === 'production' || RECOGNIZED_CONTEXTS.has(context)) return null;
+  return {
+    event: 'build_context_invalid',
+    code: 'build_context_invalid',
+    context: context == null || String(context).trim() === '' ? 'missing' : 'unrecognized',
+  };
 }
 
 /** A production build must not ship a non-production bake. */
@@ -32,6 +50,11 @@ export function readBakedValue(source) {
  * the persisted value is not. Does not run on import.
  */
 export function main(env = process.env, file = defaultFile) {
+  const problem = netlifyContextProblem(env);
+  if (problem) {
+    console.error(JSON.stringify(problem));
+    return 1;
+  }
   const context = env.CONTEXT;
   const source = renderBuildContext(bakedContextValue(context));
   writeFileSync(file, source);
