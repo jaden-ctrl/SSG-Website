@@ -1,5 +1,7 @@
 /**
- * Phase 2B lead automation extras (owner, follow-up task, company, note, notification).
+ * Legacy automation helpers. `/api/lead` does not call `runLeadAutomationWithBudget`
+ * or the search-based task lookup. Intake, task identity, and retries live in `lib/lead/`.
+ * `timelineLabel`, `spamReason`, `businessDomain`, and `recordUrl` are still shared.
  *
  * Design rules:
  * - Everything here runs AFTER the contact upsert has succeeded.

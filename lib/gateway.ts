@@ -1,4 +1,4 @@
-import "server-only";
+import { connect as tlsConnect } from "node:tls";
 import { currentDecision, type Env, type ModeDecision, PRODUCTION_HUBSPOT_PORTAL_ID } from "@/lib/runtime-mode";
 
 /**
@@ -197,4 +197,70 @@ export async function dispatchOutbound(input: OutboundInput, decision: ModeDecis
 
 export async function outboundFetch(input: OutboundInput): Promise<Response> {
   return dispatchOutbound(input, currentDecision(), process.env);
+}
+
+export type SmtpMessage = {
+  host: string;
+  port: number;
+  user: string;
+  pass: string;
+  from: string;
+  to: string[];
+  subject: string;
+  text: string;
+};
+
+export async function outboundSmtp(message: SmtpMessage, decision = currentDecision()): Promise<{ id: string; mocked: boolean }> {
+  if (decision.block) throw new LiveTestBlockedError();
+  if (decision.mode !== "live") return { id: "mock-smtp", mocked: true };
+  const id = await deliverSmtp(message);
+  console.info(JSON.stringify({ event: "outbound_fetch", channel: "smtp", mode: "live" }));
+  return { id, mocked: false };
+}
+
+function deliverSmtp(message: SmtpMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const socket = tlsConnect({ host: message.host, port: message.port, servername: message.host }, () => {
+      const pending: Buffer[] = [];
+      const read = () => new Promise<string>((done, fail) => {
+        const take = () => {
+          const text = Buffer.concat(pending).toString("utf8");
+          if (/(^|\n)\d{3} /.test(text)) {
+            pending.length = 0;
+            done(text);
+          }
+        };
+        socket.on("data", (chunk) => { pending.push(chunk); take(); });
+        socket.once("error", fail);
+        take();
+      });
+      const write = async (line: string) => {
+        socket.write(`${line}\r\n`);
+        const reply = await read();
+        if (!/^[23]\d\d/m.test(reply)) throw new Error("smtp_rejected");
+        return reply;
+      };
+      void (async () => {
+        try {
+          await read();
+          await write("EHLO ssg.local");
+          await write("AUTH LOGIN");
+          await write(Buffer.from(message.user).toString("base64"));
+          await write(Buffer.from(message.pass).toString("base64"));
+          await write(`MAIL FROM:<${message.from.match(/<([^>]+)>/)?.[1] || message.from}>`);
+          for (const recipient of message.to) await write(`RCPT TO:<${recipient}>`);
+          await write("DATA");
+          socket.write(`Subject: ${message.subject.replace(/[\r\n]/g, " ")}\r\nTo: ${message.to.join(", ")}\r\nFrom: ${message.from}\r\n\r\n${message.text.replace(/\n\./g, "\n..")}\r\n.\r\n`);
+          const reply = await read();
+          if (!/^250/m.test(reply)) throw new Error("smtp_rejected");
+          socket.end("QUIT\r\n");
+          resolve(`smtp-${Date.now()}`);
+        } catch (error) {
+          socket.destroy();
+          reject(error instanceof Error ? error : new Error("smtp_failed"));
+        }
+      })();
+    });
+    socket.once("error", () => reject(new Error("smtp_failed")));
+  });
 }

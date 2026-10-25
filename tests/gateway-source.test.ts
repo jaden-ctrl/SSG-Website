@@ -34,6 +34,7 @@ test('outbound hosts and server fetch calls stay inside the gateway', () => {
     }
     const serverFile = rel.startsWith('lib/') || rel.startsWith('app/api/') || rel.startsWith('netlify/');
     if (serverFile && !fetchAllow.has(rel) && /\bfetch\s*\(/.test(text)) violations.push(`${rel} calls fetch directly`);
+    if (rel !== 'lib/gateway.ts' && /tls\.connect\s*\(/.test(text)) violations.push(`${rel} opens a TLS connection`);
     if (!hostAllow.has(rel) && rel !== 'tests/gateway-live.test.ts' && text.includes('dispatchOutbound')) {
       violations.push(`${rel} bypasses outboundFetch`);
     }

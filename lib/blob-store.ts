@@ -1,4 +1,3 @@
-import "server-only";
 import { getDeployStore, getStore } from "@netlify/blobs";
 import {
   currentRequestHost,
@@ -55,9 +54,7 @@ export function planBlobStore(logicalName: string, env: Env = process.env, build
   return { kind: "local" };
 }
 
-export function memoryJsonStore(name: string): JsonStore {
-  if (!memoryBuckets.has(name)) memoryBuckets.set(name, new Map());
-  const bucket = memoryBuckets.get(name)!;
+function bucketStore(bucket: MemoryBucket): JsonStore {
   return {
     async get(key) {
       return bucket.get(key)?.value ?? null;
@@ -83,6 +80,16 @@ export function memoryJsonStore(name: string): JsonStore {
       return { blobs: [...bucket.keys()].filter((key) => key.startsWith(prefix)).sort().map((key) => ({ key })) };
     },
   };
+}
+
+export function memoryJsonStore(name: string): JsonStore {
+  if (!memoryBuckets.has(name)) memoryBuckets.set(name, new Map());
+  return bucketStore(memoryBuckets.get(name)!);
+}
+
+/** Request-local store. Never registered, so it cannot alias a production or preview bucket. */
+export function privateJsonStore(): JsonStore {
+  return bucketStore(new Map());
 }
 
 type NetlifyStore = {
