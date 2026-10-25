@@ -1,8 +1,9 @@
 import { createHmac } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { automationEnabled, runLeadAutomationWithBudget, timelineLabel } from '@/lib/hubspot/lead-automation';
+import { outboundFetch } from '@/lib/gateway';
+import { currentDecision, hostFromHeaders, modeLabel, runWithRequestHost } from '@/lib/runtime-mode';
 
-const HUBSPOT_BASE = 'https://api.hubapi.com';
 const HUBSPOT_TIMEOUT_MS = 8_000;
 const WEBHOOK_TIMEOUT_MS = 3_000;
 
@@ -70,16 +71,21 @@ function buildHubSpotMessage(body: LeadPayload) {
   return lines.join('\n');
 }
 
-async function hubspotFetch(path: string, token: string, init: RequestInit) {
-  return fetch(`${HUBSPOT_BASE}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      ...(init.headers || {}),
-    },
-    cache: 'no-store',
-    signal: AbortSignal.timeout(HUBSPOT_TIMEOUT_MS),
+function leadResponse(body: unknown, status = 200) {
+  const decision = currentDecision();
+  return NextResponse.json(body, {
+    status,
+    headers: { 'X-SSG-Lead-Mode': modeLabel(decision) },
+  });
+}
+
+async function hubspotFetch(path: string, init: RequestInit) {
+  return outboundFetch({
+    channel: 'hubspot',
+    path,
+    method: init.method,
+    body: typeof init.body === 'string' ? init.body : undefined,
+    timeoutMs: HUBSPOT_TIMEOUT_MS,
   });
 }
 
@@ -113,36 +119,47 @@ function webhookPayload(body: LeadPayload, contactId: unknown, action: string) {
 }
 
 export async function POST(req: NextRequest) {
+  return runWithRequestHost(hostFromHeaders(req.headers), () => handleLeadPost(req));
+}
+
+async function handleLeadPost(req: NextRequest) {
+  const decision = currentDecision();
+  console.info(JSON.stringify({ event: 'lead_runtime_mode', mode: decision.block ? 'blocked' : decision.mode }));
+  if (decision.block) {
+    console.error(JSON.stringify({ event: 'lead_live_test_blocked', reason: decision.block }));
+    return leadResponse({ ok: false, error: 'Lead system is not configured yet.' }, 503);
+  }
+
   let body: LeadPayload;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ ok: false, error: 'Invalid request body' }, { status: 400 });
+    return leadResponse({ ok: false, error: 'Invalid request body' }, 400);
   }
 
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    return NextResponse.json({ ok: false, error: 'Invalid request body' }, { status: 400 });
+    return leadResponse({ ok: false, error: 'Invalid request body' }, 400);
   }
 
   const email = text(body.email).toLowerCase();
   const firstName = text(body.first_name);
 
   if (!email || !firstName || email.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return NextResponse.json({ ok: false, error: 'Missing required fields' }, { status: 400 });
+    return leadResponse({ ok: false, error: 'Missing required fields' }, 400);
   }
 
   if (text(body.faxNumber)) {
-    return NextResponse.json({ ok: false, error: 'Please check the form.' }, { status: 400 });
+    return leadResponse({ ok: false, error: 'Please check the form.' }, 400);
   }
 
   // The form requires the consent checkbox for every variant; enforce and record it server-side too.
   if (text(body.consent) !== 'true') {
-    return NextResponse.json({ ok: false, error: 'Please confirm we may contact you about this request.' }, { status: 400 });
+    return leadResponse({ ok: false, error: 'Please confirm we may contact you about this request.' }, 400);
   }
 
   if (text(body.form_variant) === 'website_review') {
     if (!text(body.company) || !text(body.message) || text(body.message).length > 3000 || text(body.consent) !== 'true') {
-      return NextResponse.json({ ok: false, error: 'Please complete the review request.' }, { status: 400 });
+      return leadResponse({ ok: false, error: 'Please complete the review request.' }, 400);
     }
     try {
       const rawWebsite = text(body.website);
@@ -151,18 +168,19 @@ export async function POST(req: NextRequest) {
       if (!['http:', 'https:'].includes(website.protocol) || !website.hostname.includes('.') || website.username || website.password) throw new Error('Invalid website');
       body.website = website.href;
     } catch {
-      return NextResponse.json({ ok: false, error: 'Please enter a valid website address.' }, { status: 400 });
+      return leadResponse({ ok: false, error: 'Please enter a valid website address.' }, 400);
     }
   }
 
-  const token = process.env.HUBSPOT_ACCESS_TOKEN;
-  if (!token) {
+  if (decision.mode === 'live' && !process.env.HUBSPOT_ACCESS_TOKEN) {
     console.error('HUBSPOT_ACCESS_TOKEN is not configured.');
-    return NextResponse.json(
-      { ok: false, error: 'Lead system is not configured yet.' },
-      { status: 503 },
-    );
+    return leadResponse({ ok: false, error: 'Lead system is not configured yet.' }, 503);
   }
+  const token = decision.mode === 'live'
+    ? process.env.HUBSPOT_ACCESS_TOKEN || ''
+    : decision.mode === 'live-test'
+      ? process.env.HUBSPOT_TEST_ACCESS_TOKEN || ''
+      : '';
 
   const properties: Record<string, string> = {
     firstname: firstName,
@@ -183,7 +201,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const search = await hubspotFetch('/crm/v3/objects/contacts/search', token, {
+    const search = await hubspotFetch('/crm/v3/objects/contacts/search', {
       method: 'POST',
       body: JSON.stringify({
         filterGroups: [
@@ -198,7 +216,7 @@ export async function POST(req: NextRequest) {
 
     if (!search.ok) {
       console.error('HubSpot contact search failed:', JSON.stringify(await hubspotErrorSummary(search)));
-      return NextResponse.json({ ok: false, error: 'CRM search failed' }, { status: 502 });
+      return leadResponse({ ok: false, error: 'CRM search failed' }, 502);
     }
 
     const searchData = await search.json();
@@ -210,13 +228,13 @@ export async function POST(req: NextRequest) {
 
     if (existingId) {
       action = 'updated';
-      hubspotResponse = await hubspotFetch(`/crm/v3/objects/contacts/${existingId}`, token, {
+      hubspotResponse = await hubspotFetch(`/crm/v3/objects/contacts/${existingId}`, {
         method: 'PATCH',
         body: JSON.stringify({ properties }),
       });
     } else {
       action = 'created';
-      hubspotResponse = await hubspotFetch('/crm/v3/objects/contacts', token, {
+      hubspotResponse = await hubspotFetch('/crm/v3/objects/contacts', {
         method: 'POST',
         body: JSON.stringify({ properties }),
       });
@@ -226,7 +244,7 @@ export async function POST(req: NextRequest) {
         const conflictId = existingIdFromConflict(conflict?.message);
         if (conflictId) {
           action = 'updated';
-          hubspotResponse = await hubspotFetch(`/crm/v3/objects/contacts/${conflictId}`, token, {
+          hubspotResponse = await hubspotFetch(`/crm/v3/objects/contacts/${conflictId}`, {
             method: 'PATCH',
             body: JSON.stringify({ properties }),
           });
@@ -236,7 +254,7 @@ export async function POST(req: NextRequest) {
 
     if (!hubspotResponse.ok) {
       console.error('HubSpot contact write failed:', JSON.stringify(await hubspotErrorSummary(hubspotResponse)));
-      return NextResponse.json({ ok: false, error: 'CRM rejected lead' }, { status: 502 });
+      return leadResponse({ ok: false, error: 'CRM rejected lead' }, 502);
     }
 
     const hubspotData = await hubspotResponse.json();
@@ -263,23 +281,27 @@ export async function POST(req: NextRequest) {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         const secret = process.env.LEAD_WEBHOOK_SECRET;
         if (secret) headers['X-SSG-Signature'] = createHmac('sha256', secret).update(payload).digest('hex');
-        const webhookResponse = await fetch(webhook, {
+        const webhookResponse = await outboundFetch({
+          channel: 'webhook',
+          policy: 'lead',
+          url: webhook,
           method: 'POST',
           headers,
           body: payload,
-          cache: 'no-store',
-          signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
+          timeoutMs: WEBHOOK_TIMEOUT_MS,
         });
-        if (!webhookResponse.ok) console.warn('Optional lead webhook failed:', webhookResponse.status);
+        if (webhookResponse.headers.get('X-SSG-Outbound') !== 'mock' && !webhookResponse.ok) {
+          console.warn('Optional lead webhook failed:', webhookResponse.status);
+        }
       } catch (error) {
         // An optional webhook must never turn a successful HubSpot write into a failed submission.
         console.warn('Optional lead webhook error:', error instanceof Error ? error.name : 'unknown');
       }
     }
 
-    return NextResponse.json({ ok: true, action, contactId: hubspotData?.id });
+    return leadResponse({ ok: true, action, contactId: hubspotData?.id });
   } catch (error) {
     console.error('Lead submission error:', error instanceof Error ? error.name : 'unknown');
-    return NextResponse.json({ ok: false, error: 'Lead submission failed' }, { status: 502 });
+    return leadResponse({ ok: false, error: 'Lead submission failed' }, 502);
   }
 }

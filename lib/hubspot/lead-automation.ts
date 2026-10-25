@@ -9,7 +9,9 @@
  * - No secrets are ever logged.
  */
 
-const HUBSPOT_BASE = 'https://api.hubapi.com';
+import { outboundFetch } from '@/lib/gateway';
+import { currentDecision } from '@/lib/runtime-mode';
+
 const STEP_TIMEOUT_MS = 4_000;
 
 export const TASK_SUBJECT_PREFIX = 'SSG Web Inquiry:';
@@ -129,22 +131,23 @@ export function businessDomain(website: unknown, email: string): string | null {
 /* ---------------------------------------------------------------- HubSpot */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function hs(token: string, path: string, init: RequestInit = {}, attempt = 0): Promise<any> {
+async function hs(path: string, init: RequestInit = {}, attempt = 0): Promise<any> {
   let response: Response;
   try {
-    response = await fetch(`${HUBSPOT_BASE}${path}`, {
-    ...init,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(init.headers || {}) },
-    cache: 'no-store',
-    signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
-  });
+    response = await outboundFetch({
+      channel: 'hubspot',
+      path,
+      method: init.method || 'GET',
+      body: typeof init.body === 'string' ? init.body : undefined,
+      timeoutMs: STEP_TIMEOUT_MS,
+    });
   } catch (error) {
-    if (attempt < 1) return hs(token, path, init, attempt + 1); // one retry on network error/timeout
+    if (attempt < 1) return hs(path, init, attempt + 1);
     throw error;
   }
   if ((response.status === 429 || response.status >= 500) && attempt < 1) {
     await new Promise((r) => setTimeout(r, 500));
-    return hs(token, path, init, attempt + 1);
+    return hs(path, init, attempt + 1);
   }
   if (!response.ok) {
     // PII-safe: log category/correlationId only, never the response message (it can echo submitted values).
@@ -164,7 +167,7 @@ export async function assignOwner(ctx: AutomationContext): Promise<string> {
   const owner = ownerId();
   if (!owner) return 'skipped:no_owner_env';
   if (ctx.existingOwnerId) return 'skipped:already_owned';
-  await hs(ctx.token, `/crm/v3/objects/contacts/${ctx.contactId}`, {
+  await hs( `/crm/v3/objects/contacts/${ctx.contactId}`, {
     method: 'PATCH',
     body: JSON.stringify({ properties: { hubspot_owner_id: owner } }),
   });
@@ -179,7 +182,7 @@ function dedupeWindowDays() {
 /** Returns an existing open follow-up task id for this contact inside the dedupe window, if any. */
 export async function findOpenFollowUpTask(ctx: AutomationContext): Promise<string | null> {
   const since = Date.now() - dedupeWindowDays() * 24 * 60 * 60 * 1000;
-  const data = await hs(ctx.token, '/crm/v3/objects/tasks/search', {
+  const data = await hs( '/crm/v3/objects/tasks/search', {
     method: 'POST',
     body: JSON.stringify({
       filterGroups: [{
@@ -225,7 +228,7 @@ export async function ensureFollowUpTask(ctx: AutomationContext): Promise<{ stat
     hs_timestamp: new Date(Date.now() + (Number.isFinite(dueHours) ? dueHours : 24) * 3_600_000).toISOString(),
   };
   if (owner) properties.hubspot_owner_id = owner;
-  const created = await hs(ctx.token, '/crm/v3/objects/tasks', {
+  const created = await hs( '/crm/v3/objects/tasks', {
     method: 'POST',
     body: JSON.stringify({
       properties,
@@ -237,7 +240,7 @@ export async function ensureFollowUpTask(ctx: AutomationContext): Promise<{ stat
 
 /** Keeps a per-submission history (the contact "message" property is overwritten each time). */
 export async function addSubmissionNote(ctx: AutomationContext): Promise<string> {
-  await hs(ctx.token, '/crm/v3/objects/notes', {
+  await hs( '/crm/v3/objects/notes', {
     method: 'POST',
     body: JSON.stringify({
       properties: { hs_timestamp: new Date().toISOString(), hs_note_body: escapeHtml(ctx.summary.slice(0, 10000)).replace(/\n/g, '<br>') },
@@ -249,13 +252,13 @@ export async function addSubmissionNote(ctx: AutomationContext): Promise<string>
 
 /** 4. Associate a company by business domain; create one only with business name + non-free domain. */
 export async function associateCompany(ctx: AutomationContext): Promise<string> {
-  const existing = await hs(ctx.token, `/crm/v4/objects/contact/${ctx.contactId}/associations/company?limit=1`);
+  const existing = await hs( `/crm/v4/objects/contact/${ctx.contactId}/associations/company?limit=1`);
   if (existing?.results?.length) return 'skipped:already_associated';
 
   const domain = businessDomain(ctx.body.website, ctx.email);
   if (!domain) return 'skipped:no_business_domain';
 
-  const search = await hs(ctx.token, '/crm/v3/objects/companies/search', {
+  const search = await hs( '/crm/v3/objects/companies/search', {
     method: 'POST',
     body: JSON.stringify({
       filterGroups: [{ filters: [{ propertyName: 'domain', operator: 'EQ', value: domain }] }],
@@ -266,7 +269,7 @@ export async function associateCompany(ctx: AutomationContext): Promise<string> 
   });
   const companyId: string | undefined = search?.results?.[0]?.id;
   if (companyId) {
-    await hs(ctx.token, `/crm/v4/objects/contact/${ctx.contactId}/associations/default/company/${companyId}`, { method: 'PUT' });
+    await hs( `/crm/v4/objects/contact/${ctx.contactId}/associations/default/company/${companyId}`, { method: 'PUT' });
     return `associated_existing:${companyId}`;
   }
 
@@ -277,7 +280,7 @@ export async function associateCompany(ctx: AutomationContext): Promise<string> 
   if (website && hostnameOf(website) === domain) properties.website = website;
   const owner = ownerId();
   if (owner) properties.hubspot_owner_id = owner;
-  const created = await hs(ctx.token, '/crm/v3/objects/companies', {
+  const created = await hs( '/crm/v3/objects/companies', {
     method: 'POST',
     body: JSON.stringify({
       properties,
@@ -301,12 +304,15 @@ export function recordUrl(contactId: string) {
  * built-in "Task assigned to you" email, which needs no code.
  */
 export async function sendNotification(ctx: AutomationContext, taskStatus: string): Promise<string> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const to = text(process.env.NOTIFY_EMAIL_TO);
-  const from = text(process.env.NOTIFY_EMAIL_FROM);
-  if (!apiKey || !to || !from) return 'skipped:not_configured';
+  const decision = currentDecision();
+  if (decision.mode === 'mock' || decision.block) return 'skipped:mock';
+  const to = text(decision.mode === 'live-test' ? process.env.NOTIFY_EMAIL_TEST_TO : process.env.NOTIFY_EMAIL_TO);
+  const from = text(decision.mode === 'live-test' ? process.env.NOTIFY_EMAIL_TEST_FROM || process.env.NOTIFY_EMAIL_FROM : process.env.NOTIFY_EMAIL_FROM);
+  const configured = decision.mode === 'live' ? process.env.RESEND_API_KEY : process.env.RESEND_TEST_API_KEY;
+  if (!configured || !to || !from) return 'skipped:not_configured';
   if (taskStatus !== 'created') return 'skipped:no_new_task';
   const name = displayName(ctx.body, ctx.email);
+  const recipients = to.split(',').map((s) => s.trim()).filter(Boolean);
   const lines = [
     `New ${variantLabel(ctx.body).toLowerCase()} (${ctx.action} contact)`,
     '',
@@ -320,17 +326,20 @@ export async function sendNotification(ctx: AutomationContext, taskStatus: strin
     '',
     `HubSpot record: ${recordUrl(ctx.contactId)}`,
   ];
-  const response = await fetch('https://api.resend.com/emails', {
+  const response = await outboundFetch({
+    channel: 'resend',
+    path: '/emails',
     method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    recipients,
     body: JSON.stringify({
       from,
-      to: to.split(',').map((s) => s.trim()).filter(Boolean),
+      to: recipients,
       subject: `[SSG lead] ${name}${text(ctx.body.company) ? ` — ${text(ctx.body.company).slice(0, 80)}` : ''}`,
       text: lines.join('\n'),
     }),
-    signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
+    timeoutMs: STEP_TIMEOUT_MS,
   });
+  if (response.headers.get('X-SSG-Outbound') === 'mock') return 'skipped:mock';
   if (!response.ok) throw new Error(`Resend send failed -> ${response.status}`);
   return 'sent';
 }
