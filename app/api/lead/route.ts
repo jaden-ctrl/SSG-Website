@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { automationEnabled, runLeadAutomationWithBudget, timelineLabel } from '@/lib/hubspot/lead-automation';
 
 const HUBSPOT_BASE = 'https://api.hubapi.com';
 
@@ -44,7 +45,7 @@ function buildHubSpotMessage(body: LeadPayload) {
   } else {
     lines.push(
       `Project type: ${text(body.project_type) || 'Not provided'}`,
-      `Target timeline: ${text(body.timeline) || 'Not provided'}`,
+      `Target timeline: ${timelineLabel(body.timeline)}`,
       `Estimated investment: ${text(body.budget) || 'Not provided'}`,
       `Desired outcome: ${text(body.message) || 'Not provided'}`,
     );
@@ -151,7 +152,7 @@ export async function POST(req: NextRequest) {
             filters: [{ propertyName: 'email', operator: 'EQ', value: email }],
           },
         ],
-        properties: ['email'],
+        properties: ['email', 'hubspot_owner_id'],
         limit: 1,
       }),
     });
@@ -164,6 +165,7 @@ export async function POST(req: NextRequest) {
 
     const searchData = await search.json();
     const existingId = searchData?.results?.[0]?.id as string | undefined;
+    const existingOwnerId = (searchData?.results?.[0]?.properties?.hubspot_owner_id as string | undefined) || undefined;
 
     let hubspotResponse: Response;
     let action: 'created' | 'updated';
@@ -190,21 +192,41 @@ export async function POST(req: NextRequest) {
 
     const hubspotData = await hubspotResponse.json();
 
+    // Phase 2B extras: owner, follow-up task, company, note, notification.
+    // Runs only after a successful upsert, is fully isolated (never throws) and is
+    // a no-op unless LEAD_AUTOMATION_ENABLED=true.
+    if (automationEnabled() && hubspotData?.id) {
+      await runLeadAutomationWithBudget({
+        token,
+        contactId: String(hubspotData.id),
+        action,
+        existingOwnerId,
+        email,
+        body,
+        summary: properties.message,
+      });
+    }
+
     const webhook = process.env.LEAD_WEBHOOK_URL;
     if (webhook) {
-      const webhookResponse = await fetch(webhook, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...body,
-          submitted_at: new Date().toISOString(),
-          hubspot_contact_id: hubspotData?.id,
-          hubspot_action: action,
-        }),
-        cache: 'no-store',
-      });
-      if (!webhookResponse.ok) {
-        console.warn('Optional lead webhook failed:', webhookResponse.status);
+      try {
+        const webhookResponse = await fetch(webhook, {
+          signal: AbortSignal.timeout(5_000),
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...body,
+            submitted_at: new Date().toISOString(),
+            hubspot_contact_id: hubspotData?.id,
+            hubspot_action: action,
+          }),
+          cache: 'no-store',
+        });
+        if (!webhookResponse.ok) {
+          console.warn('Optional lead webhook failed:', webhookResponse.status);
+        }
+      } catch (error) {
+        console.warn('Optional lead webhook error:', error instanceof Error ? error.message : 'unknown');
       }
     }
 
