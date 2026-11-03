@@ -6,7 +6,7 @@ import { Menu, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-const links = [['/services', 'Websites'], ['/work', 'Our Work'], ['/about', 'About'], ['/audit', 'Free Website Review']] as const;
+const links = [['/services', 'Websites'], ['/products', 'Products'], ['/work', 'Our Work'], ['/about', 'About'], ['/audit', 'Free Website Review']] as const;
 
 export default function Nav() {
   const [open, setOpen] = useState(false);
@@ -38,7 +38,7 @@ export default function Nav() {
       <nav id="mobile-navigation" className={`mobile-nav ${open ? 'is-open' : ''}`} aria-label="Mobile navigation">
         <div className="container mobile-nav-inner">
           {links.map(([href, label], index) => <Link key={href} href={href} aria-current={pathname === href ? 'page' : undefined} onClick={() => setOpen(false)} style={{ '--menu-index': index } as React.CSSProperties}>{label}</Link>)}
-          <Link className="btn btn-primary" href="/contact" onClick={() => setOpen(false)} style={{ '--menu-index': 4 } as React.CSSProperties}>Request a Website Quote</Link>
+          <Link className="btn btn-primary" href="/contact" onClick={() => setOpen(false)} style={{ '--menu-index': links.length } as React.CSSProperties}>Request a Website Quote</Link>
         </div>
       </nav>
     </header>

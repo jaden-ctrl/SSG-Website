@@ -7,6 +7,7 @@ export default function Footer() {
         <div>© {new Date().getFullYear()} Shipley Solutions Group Inc. All rights reserved.</div>
         <div className="footer-links">
           <Link href="/services">Websites</Link>
+          <Link href="/products">Products</Link>
           <Link href="/work">Our Work</Link>
           <Link href="/audit">Free Website Review</Link>
           <Link href="/contact">Request a Website Quote</Link>
