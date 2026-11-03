@@ -4,11 +4,12 @@ import {
   ArrowRight, ArrowUpRight, Bot, CalendarDays, Calculator,
   Check, ClipboardCheck, Layers3, Rocket, Target, Workflow
 } from 'lucide-react';
+import ProductInterestForm from '@/components/ProductInterestForm';
 import './products.css';
 
 export const metadata: Metadata = {
-  title: 'Products | Digital Business Tools',
-  description: 'Explore upcoming digital products from Shipley Solutions Group: practical templates, spreadsheets and playbooks for small-business sales, pricing, marketing and operations.',
+  title: 'Digital Products & Business Tools',
+  description: 'Explore SSG digital products in development, including sales templates, pricing spreadsheets and startup planners. Register your interest in upcoming releases.',
   alternates: { canonical: '/products' },
   openGraph: {
     title: 'Digital Business Products | Shipley Solutions Group',
@@ -75,6 +76,16 @@ const products = [
   },
 ] as const;
 
+
+const productDetails: Record<string, { audience: string; format: string }> = {
+ 'Client Acquisition & Sales Toolkit': { audience: 'Service businesses, consultants and B2B sellers', format: 'Editable scripts and sales tracker' },
+ 'Business Profit & Pricing Calculator': { audience: 'Owners pricing services or reviewing margins', format: 'Interactive spreadsheet workbook' },
+ 'Small Business Launch Kit': { audience: 'First-time founders and new businesses', format: 'Planning workbook and checklists' },
+ '90-Day Marketing Content Engine': { audience: 'Owners managing their own marketing', format: 'Calendar and editable templates' },
+ 'Client Onboarding & Retention System': { audience: 'Service providers managing client workflows', format: 'Editable forms and workflow checklists' },
+ 'AI Business Automation Playbook': { audience: 'Small teams exploring AI-assisted operations', format: 'Prompt library and practical guides' },
+};
+
 export default function ProductsPage() {
   return (
     <main id="main-content" className="products-page">
@@ -82,18 +93,18 @@ export default function ProductsPage() {
         <div className="container products-hero-grid">
           <div className="products-hero-copy">
             <div className="eyebrow">SSG DIGITAL PRODUCTS</div>
-            <h1 className="display products-display">Better tools.<br /><span className="blue">Stronger business.</span></h1>
-            <p className="lede">Practical digital resources for business owners who want to spend less time figuring things out and more time moving forward.</p>
+            <h1 className="display products-display">Less guesswork.<br /><span className="blue">More progress.</span></h1>
+            <p className="lede">Digital tools being built to help small businesses win clients, price their work, organize operations and make confident decisions.</p>
             <div className="products-hero-actions">
-              <a className="btn btn-primary" href="#product-catalog">Explore the Collection <ArrowRight size={18} /></a>
-              <Link className="btn btn-secondary" href="/services">Explore Our Services</Link>
+              <a className="btn btn-primary" href="#product-catalog">Explore Products <ArrowRight size={18} /></a>
+              <a className="btn btn-secondary" href="#launch-list">Get Launch Updates</a>
             </div>
-            <p className="products-release-note"><span className="products-pulse" aria-hidden="true" /> Storefront preview · Products are in development</p>
+            <p className="products-release-note"><span className="products-pulse" aria-hidden="true" /> Collection preview · No products are on sale yet</p>
           </div>
           <div className="products-preview" aria-label="Preview of the SSG digital business resources collection">
             <div className="products-preview-top">
               <span>SSG <b>/</b> RESOURCES</span>
-              <span>THE DIGITAL COLLECTION</span>
+              <span>COLLECTION PREVIEW</span>
             </div>
             <div className="products-preview-body">
               <div className="products-preview-kicker">BUILD YOUR NEXT MOVE</div>
@@ -105,41 +116,69 @@ export default function ProductsPage() {
                 <div><Workflow size={24} /><span>RUN BETTER</span></div>
               </div>
             </div>
-            <div className="products-preview-bottom"><span><Layers3 size={15} /> SIX RESOURCES PLANNED</span><span>SSG / 001—006</span></div>
+            <div className="products-preview-bottom"><span><Layers3 size={15} /> SIX PRODUCTS IN THE PIPELINE</span><span>CONCEPT VIEW</span></div>
           </div>
         </div>
       </section>
 
       <section className="products-status-bar" aria-label="Storefront launch status">
         <div className="container">
-          <div className="products-status-copy"><span className="products-status-dot" aria-hidden="true" /><strong>The collection is being built.</strong> Preview the planned products below. Purchasing and automatic downloads are not available yet.</div>
+          <div className="products-status-copy"><span className="products-status-dot" aria-hidden="true" /><strong>Building the collection.</strong> Browse planned resources and tell us what interests you. Purchasing and downloads are not available yet.</div>
         </div>
       </section>
 
       <section className="section products-catalog-section" id="product-catalog">
         <div className="container">
           <div className="section-head products-section-heading">
-            <div><div className="eyebrow">THE COLLECTION</div><h2 className="h2">Made for the way<br />small businesses work.</h2></div>
-            <p className="lede section-copy">From your first customers to your day-to-day systems, each resource is being developed to solve a specific business challenge.</p>
+            <div><div className="eyebrow">FIRST IN THE PIPELINE</div><h2 className="h2">Start with what<br />moves business forward.</h2></div>
+            <p className="lede section-copy">Our first three development priorities focus on tasks small-business owners can put into practice.</p>
           </div>
           <div className="products-grid">
-            {products.map(({ number, category, title, description, includes, Icon, priority }) => (
+            {products.filter(item => item.priority).map(({ number, category, title, description, includes, Icon, priority }) => (
               <article className={'products-card' + (priority ? ' products-card-priority' : '')} key={number}>
                 <div className="products-card-top">
                   <span className="products-card-index">{number} / 06</span>
-                  <span className="products-card-status">COMING SOON</span>
+                  <span className="products-card-status">{priority ? 'IN DEVELOPMENT' : 'PLANNED'}</span>
                 </div>
                 <div className="products-card-symbol" aria-hidden="true"><Icon size={30} strokeWidth={1.65} /></div>
                 <div className="products-card-category">{category}</div>
                 <h3>{title}</h3>
-                <p>{description}</p>
+                <p>{description}</p><div className="products-card-details"><div><span>BEST FOR</span><p>{productDetails[title].audience}</p></div><div><span>PLANNED FORMAT</span><p>{productDetails[title].format}</p></div></div>
                 <div className="products-card-divider" />
                 <div className="products-card-includes-label">PLANNED CONTENT</div>
-                <ul>{includes.map((feature) => <li key={feature}><Check size={15} /> {feature}</li>)}</ul>
+                <ul>{includes.map((feature) => <li key={feature}><Check size={15} /> {feature}</li>)}</ul><a className="products-card-interest" href="#launch-list">Interested? Join the launch list <ArrowRight size={16}/></a>
               </article>
             ))}
           </div>
-          <p className="products-catalog-disclaimer">This is an advance look at the product roadmap. Final contents, pricing, release dates and availability will be confirmed when each product launches.</p>
+          <div className="products-roadmap-heading"><div><div className="eyebrow">ON THE ROADMAP</div><h2>More tools to come.</h2></div><p>Resources planned for marketing, client operations and AI-assisted workflows.</p></div>
+          <div className="products-grid products-grid-roadmap">
+            {products.filter(item => !item.priority).map(({ number, category, title, description, includes, Icon, priority }) => (
+              <article className={'products-card' + (priority ? ' products-card-priority' : '')} key={number}>
+                <div className="products-card-top">
+                  <span className="products-card-index">{number} / 06</span>
+                  <span className="products-card-status">{priority ? 'IN DEVELOPMENT' : 'PLANNED'}</span>
+                </div>
+                <div className="products-card-symbol" aria-hidden="true"><Icon size={30} strokeWidth={1.65} /></div>
+                <div className="products-card-category">{category}</div>
+                <h3>{title}</h3>
+                <p>{description}</p><div className="products-card-details"><div><span>BEST FOR</span><p>{productDetails[title].audience}</p></div><div><span>PLANNED FORMAT</span><p>{productDetails[title].format}</p></div></div>
+                <div className="products-card-divider" />
+                <div className="products-card-includes-label">PLANNED CONTENT</div>
+                <ul>{includes.map((feature) => <li key={feature}><Check size={15} /> {feature}</li>)}</ul><a className="products-card-interest" href="#launch-list">Interested? Join the launch list <ArrowRight size={16}/></a>
+              </article>
+            ))}
+          </div>
+          <p className="products-catalog-disclaimer">These are previews, not completed offers. Final features, file formats, pricing and release dates may change before launch.</p>
+        </div>
+      </section>
+
+      <section className="section-tight products-interest-section" id="launch-list">
+        <div className="container products-interest-grid">
+          <div><div className="eyebrow">BE FIRST TO KNOW</div><h2 className="h2">Which product would<br/><span className="blue">help your business?</span></h2>
+            <p className="lede">Tell us what interests you. We will use your feedback to prioritize the collection and email you about relevant releases.</p>
+            <p className="products-form-note">No payment required. Signing up does not reserve a product or place an order.</p>
+          </div>
+          <ProductInterestForm products={products.map(product => product.title)} />
         </div>
       </section>
 
@@ -150,6 +189,18 @@ export default function ProductsPage() {
             <div><span>01</span><div><h3>Focused on real tasks</h3><p>Plan, price, market, sell and follow up with more structure.</p></div></div>
             <div><span>02</span><div><h3>Built for independent teams</h3><p>Designed with founders, local businesses and small teams in mind.</p></div></div>
             <div><span>03</span><div><h3>Separate from Business OS</h3><p>Downloadable resources will be distinct from our upcoming software platform.</p></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section className="section products-faq-section">
+        <div className="container products-faq-grid">
+          <div><div className="eyebrow">GOOD TO KNOW</div><h2 className="h2">A few quick answers.</h2></div>
+          <div className="products-faq-list">
+            <details><summary>Can I buy these products now?</summary><p>Not yet. Final prices and purchasing will be added after the products and their delivery process are ready.</p></details>
+            <details><summary>Will these be downloads or subscriptions?</summary><p>The products here are planned as standalone digital downloads. SSG Business OS is a separate software platform.</p></details>
+            <details><summary>Which file formats will be available?</summary><p>Depending on the product, we expect editable spreadsheets, document templates or guides. We will confirm formats and compatibility before sales open.</p></details>
+            <details><summary>What happens when I join the launch list?</summary><p>We record your interest and can email you about relevant product releases. Signing up does not create an account or charge you.</p></details>
           </div>
         </div>
       </section>
