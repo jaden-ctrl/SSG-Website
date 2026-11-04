@@ -139,3 +139,26 @@
 @media(max-width:900px){.products-interest-grid,.products-faq-grid{grid-template-columns:1fr;gap:34px}}
 @media(max-width:760px){.products-roadmap-heading{align-items:flex-start;flex-direction:column;gap:12px;padding-top:62px}}
 @media(max-width:550px){.products-form-row{grid-template-columns:1fr}.products-interest-grid .h2{font-size:clamp(2rem,9vw,3rem)}}
+
+
+/* Full product catalog and bundle */
+.products-page .products-display{font-size:clamp(2.85rem,5.2vw,4.9rem)}
+.products-card-price-row{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:22px;padding-top:18px;border-top:1px solid #34496c}
+.products-card-price-row span{font-size:.7rem;letter-spacing:.09em;font-weight:800;color:#9db1d6}
+.products-card-price-row strong{font-size:2rem;letter-spacing:-.05em;color:#fff}
+.products-card-detail-link{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;padding:13px 16px;border:1px solid #5977bb;border-radius:11px;background:#203c71;color:#fff;font-size:.9rem;font-weight:800}
+.products-card-detail-link:hover{background:#345799}
+.products-bundle-section{border-block:1px solid rgba(140,166,239,.17);background:radial-gradient(ellipse at 75% 45%,rgba(36,84,185,.16),transparent 50%)}
+.products-bundle-feature{display:grid;grid-template-columns:1.25fr .75fr;gap:clamp(30px,6vw,90px);align-items:center;padding:clamp(26px,4.5vw,58px);border:1px solid #456092;border-radius:23px;background:linear-gradient(130deg,#182e51,#0e1b30)}
+.products-bundle-feature .h2{margin:12px 0 16px}
+.products-bundle-feature .lede{max-width:660px;color:#becce1}
+.products-bundle-chips{display:flex;gap:9px;flex-wrap:wrap;margin:23px 0 28px}
+.products-bundle-chips span{padding:8px 11px;border:1px solid #3b5582;border-radius:99px;color:#d4e1fb;font-size:.78rem;font-weight:750}
+.products-bundle-price{display:flex;flex-direction:column;align-items:flex-start;gap:9px;padding:30px;border:1px solid #5675ab;border-radius:19px;background:rgba(24,48,88,.58)}
+.products-bundle-price>span{font-size:.72rem;letter-spacing:.12em;color:#b5c9ee;font-weight:850}
+.products-bundle-price>strong{font-size:clamp(4rem,7vw,6.25rem);letter-spacing:-.075em;line-height:1.08;color:#fff}
+.products-bundle-price p{color:#becce7;margin:0}
+.products-bundle-price div{font-size:1rem;font-weight:800;color:#c6dbff}
+.products-bundle-price small{color:#9cadcd;font-size:.78rem}
+@media(max-width:840px){.products-bundle-feature{grid-template-columns:minmax(0,1fr)}.products-bundle-price{max-width:420px}}
+@media(max-width:550px){.products-bundle-feature{padding:24px 19px}.products-bundle-price{padding:24px}}
